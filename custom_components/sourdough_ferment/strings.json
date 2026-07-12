@@ -1,0 +1,46 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sourdough Fermentation",
+        "description": "Pick the sensors that drive the bulk fermentation estimate and set your default recipe. A dough probe (internal temperature) is the most accurate input; if set, it overrides room temperature and humidity. The recipe values below become live-editable sliders you can adjust from a dashboard before each bake.",
+        "data": {
+          "name": "Name",
+          "room_temp_sensor": "Room temperature sensor",
+          "dough_probe_sensor": "Dough probe sensor (optional, most accurate)",
+          "humidity_sensor": "Humidity sensor (optional)",
+          "starter_g": "Starter (g)",
+          "flour_g": "Flour (g)",
+          "water_g": "Water (g)",
+          "protein_pct": "Flour protein (%)",
+          "use_humidity_modifier": "Apply humidity modifier (room temp only)"
+        },
+        "data_description": {
+          "starter_g": "Defaults to 50 g \u2192 10% inoculation at 500 g flour.",
+          "protein_pct": "Higher protein lets the dough tolerate a longer bulk; it nudges the target rise rather than the fermentation rate. ~12.5% is typical strong bread flour."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sourdough Fermentation options",
+        "description": "Change sensors, default recipe, or the underlying model constants. Defaults are calibrated to a Tartine-style bake: 5 h bulk at 24 \u00b0C dough temp, 20% inoculation reference.",
+        "data": {
+          "room_temp_sensor": "Room temperature sensor",
+          "dough_probe_sensor": "Dough probe sensor (optional, most accurate)",
+          "humidity_sensor": "Humidity sensor (optional)",
+          "starter_g": "Starter (g)",
+          "flour_g": "Flour (g)",
+          "water_g": "Water (g)",
+          "protein_pct": "Flour protein (%)",
+          "use_humidity_modifier": "Apply humidity modifier (room temp only)",
+          "q10": "Q10 (rate multiplier per +10 \u00b0C)",
+          "ref_temp": "Reference temperature (\u00b0C)",
+          "base_hours": "Base bulk time at reference conditions (h)"
+        }
+      }
+    }
+  }
+}
