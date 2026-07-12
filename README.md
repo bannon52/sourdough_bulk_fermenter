@@ -34,6 +34,33 @@ room temperature *before* you mix. Values persist across restarts.
 
 Starter ratio is derived as starter/flour; hydration as water/flour.
 
+## Built-in countdown (temperature-aware)
+
+Two buttons — **Start bulk** and **Reset bulk** — drive an integrated timer.
+Instead of a fixed countdown, it accumulates *fermentation progress* by
+integrating the live rate over time. When the room warms the clock effectively
+speeds up; when it cools it slows down. This surfaces as:
+
+- `sensor.<name>_bulk_progress` (%) — cumulative progress, 0 → 100. Persists
+  across restarts (downtime isn't credited, since the temperature then is
+  unknown).
+- `sensor.<name>_bulk_time_remaining` (h) — re-forecast every tick from the
+  *current* conditions.
+- `sensor.<name>_bulk_ready_at` (timestamp) — projected finish, great for a
+  notification automation ("dough ready at 6:42 PM").
+
+The accumulator ticks every 60 s and also on every temperature change. Progress
+hits 100% when the integrated rate says the bulk is complete.
+
+## Total hydration output
+
+`sensor.<name>_total_hydration` reports **true** hydration, including the flour
+and water locked up in your starter. With a 100%-hydration starter, 50 g starter
+adds 25 g flour + 25 g water, so 50 g / 375 g / 500 g reads **76.2%**, not the
+naive 75%. Set your starter's hydration in Options if it isn't 100% (e.g. a
+stiff 50% starter). The sensor's attributes break down recipe vs starter flour
+and water.
+
 ## How protein and hydration factor in
 
 - **Hydration** (from water/flour) is a genuine *rate* modifier — wetter dough

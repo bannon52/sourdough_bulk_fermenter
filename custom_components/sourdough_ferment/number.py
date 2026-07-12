@@ -22,6 +22,9 @@ from .const import (
     CONF_STARTER_G,
     CONF_WATER_G,
     DOMAIN,
+    MAX_FLOUR_G,
+    MAX_STARTER_G,
+    MAX_WATER_G,
     SIGNAL_UPDATE,
 )
 from .coordinator import SourdoughCoordinator
@@ -39,17 +42,17 @@ async def async_setup_entry(
             RecipeNumber(
                 coordinator, entry, "Starter", CONF_STARTER_G, "mdi:cup",
                 lambda c, v: setattr(c, "starter_g", v),
-                lambda c: c.starter_g, 0, 500, 5, "g",
+                lambda c: c.starter_g, 0, MAX_STARTER_G, 5, "g",
             ),
             RecipeNumber(
                 coordinator, entry, "Flour", CONF_FLOUR_G, "mdi:grain",
                 lambda c, v: setattr(c, "flour_g", v),
-                lambda c: c.flour_g, 50, 2000, 5, "g",
+                lambda c: c.flour_g, 50, MAX_FLOUR_G, 5, "g",
             ),
             RecipeNumber(
                 coordinator, entry, "Water", CONF_WATER_G, "mdi:water",
                 lambda c, v: setattr(c, "water_g", v),
-                lambda c: c.water_g, 0, 2000, 5, "g",
+                lambda c: c.water_g, 0, MAX_WATER_G, 5, "g",
             ),
             RecipeNumber(
                 coordinator, entry, "Flour protein", CONF_PROTEIN, "mdi:barley",

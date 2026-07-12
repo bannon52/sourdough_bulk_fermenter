@@ -26,6 +26,7 @@ from .const import (
     CONF_REF_TEMP,
     CONF_ROOM_TEMP,
     CONF_STARTER_G,
+    CONF_STARTER_HYDRATION,
     CONF_USE_HUMIDITY,
     CONF_WATER_G,
     DEFAULT_BASE_HOURS,
@@ -35,9 +36,13 @@ from .const import (
     DEFAULT_Q10,
     DEFAULT_REF_TEMP,
     DEFAULT_STARTER_G,
+    DEFAULT_STARTER_HYDRATION,
     DEFAULT_USE_HUMIDITY,
     DEFAULT_WATER_G,
     DOMAIN,
+    MAX_FLOUR_G,
+    MAX_STARTER_G,
+    MAX_WATER_G,
 )
 
 _TEMP_SELECTOR = selector.EntitySelector(
@@ -72,13 +77,13 @@ def _base_schema(d: dict[str, Any]) -> vol.Schema:
             ): _HUMIDITY_SELECTOR,
             vol.Required(
                 CONF_STARTER_G, default=d.get(CONF_STARTER_G, DEFAULT_STARTER_G)
-            ): _grams(0, 500, 5),
+            ): _grams(0, MAX_STARTER_G, 5),
             vol.Required(
                 CONF_FLOUR_G, default=d.get(CONF_FLOUR_G, DEFAULT_FLOUR_G)
-            ): _grams(50, 2000, 5),
+            ): _grams(50, MAX_FLOUR_G, 5),
             vol.Required(
                 CONF_WATER_G, default=d.get(CONF_WATER_G, DEFAULT_WATER_G)
-            ): _grams(0, 2000, 5),
+            ): _grams(0, MAX_WATER_G, 5),
             vol.Required(
                 CONF_PROTEIN, default=d.get(CONF_PROTEIN, DEFAULT_PROTEIN)
             ): selector.NumberSelector(
@@ -97,6 +102,14 @@ def _base_schema(d: dict[str, Any]) -> vol.Schema:
 
 def _advanced_schema(d: dict[str, Any]) -> dict:
     return {
+        vol.Optional(
+            CONF_STARTER_HYDRATION,
+            default=d.get(CONF_STARTER_HYDRATION, DEFAULT_STARTER_HYDRATION),
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=50, max=150, step=5, unit_of_measurement="%"
+            )
+        ),
         vol.Optional(
             CONF_Q10, default=d.get(CONF_Q10, DEFAULT_Q10)
         ): selector.NumberSelector(

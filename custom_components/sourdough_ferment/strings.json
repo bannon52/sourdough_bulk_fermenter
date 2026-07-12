@@ -16,7 +16,7 @@
           "use_humidity_modifier": "Apply humidity modifier (room temp only)"
         },
         "data_description": {
-          "starter_g": "Defaults to 50 g \u2192 10% inoculation at 500 g flour.",
+          "starter_g": "Defaults to 50 g → 10% inoculation at 500 g flour.",
           "protein_pct": "Higher protein lets the dough tolerate a longer bulk; it nudges the target rise rather than the fermentation rate. ~12.5% is typical strong bread flour."
         }
       }
@@ -26,7 +26,7 @@
     "step": {
       "init": {
         "title": "Sourdough Fermentation options",
-        "description": "Change sensors, default recipe, or the underlying model constants. Defaults are calibrated to a Tartine-style bake: 5 h bulk at 24 \u00b0C dough temp, 20% inoculation reference.",
+        "description": "Change sensors, default recipe, or the underlying model constants. Defaults are calibrated to a Tartine-style bake: 5 h bulk at 24 °C dough temp, 20% inoculation reference.",
         "data": {
           "room_temp_sensor": "Room temperature sensor",
           "dough_probe_sensor": "Dough probe sensor (optional, most accurate)",
@@ -36,9 +36,13 @@
           "water_g": "Water (g)",
           "protein_pct": "Flour protein (%)",
           "use_humidity_modifier": "Apply humidity modifier (room temp only)",
-          "q10": "Q10 (rate multiplier per +10 \u00b0C)",
-          "ref_temp": "Reference temperature (\u00b0C)",
-          "base_hours": "Base bulk time at reference conditions (h)"
+          "q10": "Q10 (rate multiplier per +10 °C)",
+          "ref_temp": "Reference temperature (°C)",
+          "base_hours": "Base bulk time at reference conditions (h)",
+          "starter_hydration_pct": "Starter hydration (%)"
+        },
+        "data_description": {
+          "starter_hydration_pct": "Water÷flour of your starter. 100% = equal parts (default). Used to compute true total hydration."
         }
       }
     }
