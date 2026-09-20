@@ -27,6 +27,20 @@ from .coordinator import SourdoughCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 
+def _format_clock(dt_value: datetime | None) -> str | None:
+    """Render a datetime as a plain local clock string, e.g. '9:20 PM'.
+
+    Avoids relying on platform-specific strftime flags (%-I doesn't exist on
+    Windows) so this works the same on every HA install.
+    """
+    if dt_value is None:
+        return None
+    local = dt_util.as_local(dt_value)
+    hour = local.hour % 12 or 12
+    period = "AM" if local.hour < 12 else "PM"
+    return f"{hour}:{local.minute:02d} {period}"
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -169,10 +183,13 @@ class FinishIfStartedNowSensor(_BaseFermentSensor):
     def extra_state_attributes(self) -> dict:
         if not self._data.get("available"):
             return {}
+        hours = self._data["hours"]
+        clock = _format_clock(dt_util.utcnow() + timedelta(hours=hours))
         return {
-            "bulk_hours": self._data["hours"],
+            "bulk_hours": hours,
             "temperature_used_c": self._data["temp_used_c"],
             "temperature_source": self._data["temp_source"],
+            "clock": clock,
         }
 
 
@@ -325,6 +342,10 @@ class BulkReadyAtSensor(_BaseTimerSensor):
     @property
     def native_value(self) -> datetime | None:
         return self._state.get("ready_at")
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"clock": _format_clock(self._state.get("ready_at"))}
 
 
 def _iso(value) -> str | None:
