@@ -14,6 +14,74 @@ const DOME_HEIGHT = DOME_BASE - DOME_TOP;
 const DOME_PATH =
   "M14,150 L14,84 C14,42 46,14 100,14 C154,14 186,42 186,84 L186,150 Z";
 
+/**
+ * Entity-name suffixes this integration produces. Used to auto-discover the
+ * card's entities from a device, so the card works no matter what the user
+ * named the config entry (the device name becomes the entity_id prefix).
+ */
+const ENTITY_SUFFIXES = {
+  progress_entity: ["_bulk_progress"],
+  ready_at_entity: ["_bulk_ready_at"],
+  finish_now_entity: ["_finish_time_if_started_now", "_finish_if_started_now"],
+  remaining_entity: ["_bulk_time_remaining"],
+  hydration_entity: ["_total_hydration"],
+  starter_entity: ["_starter"],
+  flour_entity: ["_flour"],
+  water_entity: ["_water"],
+  start_entity: ["_start_bulk"],
+  reset_entity: ["_reset_bulk"],
+};
+
+// Suffixes that would also match a longer sibling; require an exact tail match
+// so "_flour" never captures "_flour_protein".
+const AMBIGUOUS = new Set(["_starter", "_flour", "_water"]);
+
+/** All entity_ids belonging to a device, via the frontend entity registry. */
+function entitiesForDevice(hass, deviceId) {
+  if (!deviceId || !hass.entities) return [];
+  const out = [];
+  for (const [entityId, entry] of Object.entries(hass.entities)) {
+    if (entry && entry.device_id === deviceId) out.push(entityId);
+  }
+  return out;
+}
+
+/**
+ * Resolve the full entity set for the card.
+ * Explicit config always wins; anything missing is discovered from device_id.
+ */
+function resolveEntities(hass, config) {
+  const resolved = {};
+  const pool = entitiesForDevice(hass, config.device_id);
+
+  for (const key of Object.keys(ENTITY_SUFFIXES)) {
+    if (config[key]) {
+      resolved[key] = config[key];
+      continue;
+    }
+    if (!pool.length) continue;
+
+    let match;
+    for (const suffix of ENTITY_SUFFIXES[key]) {
+      match = pool.find((id) => {
+        const objectId = id.split(".")[1] || "";
+        if (!objectId.endsWith(suffix)) return false;
+        if (AMBIGUOUS.has(suffix)) {
+          // Guard against "_flour" matching "..._flour_protein".
+          const others = Object.values(ENTITY_SUFFIXES)
+            .flat()
+            .filter((s) => s !== suffix && s.startsWith(suffix));
+          if (others.some((s) => objectId.endsWith(s))) return false;
+        }
+        return true;
+      });
+      if (match) break;
+    }
+    if (match) resolved[key] = match;
+  }
+  return resolved;
+}
+
 function formatHours(hoursFloat) {
   if (hoursFloat === null || hoursFloat === undefined || isNaN(hoursFloat)) {
     return "—";
@@ -228,11 +296,31 @@ class SourdoughFermentationCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config.progress_entity) {
-      throw new Error("sourdough-fermentation-card: 'progress_entity' is required");
+    if (!config.progress_entity && !config.device_id) {
+      throw new Error(
+        "sourdough-fermentation-card: pick a device (or set 'progress_entity')"
+      );
     }
     this._config = config;
     this._render();
+  }
+
+  static getConfigElement() {
+    return document.createElement("sourdough-fermentation-card-editor");
+  }
+
+  static getStubConfig(hass) {
+    // Prefill with the first Sourdough Fermentation device found, if any.
+    let deviceId;
+    if (hass && hass.entities && hass.devices) {
+      for (const entry of Object.values(hass.entities)) {
+        if (entry && entry.platform === "sourdough_ferment" && entry.device_id) {
+          deviceId = entry.device_id;
+          break;
+        }
+      }
+    }
+    return deviceId ? { device_id: deviceId } : {};
   }
 
   set hass(hass) {
@@ -263,12 +351,16 @@ class SourdoughFermentationCard extends HTMLElement {
     if (!this._config || !this._hass) return;
     this._ensureShell();
 
-    const cfg = this._config;
     const hass = this._hass;
+    // Explicit config wins; anything unset is discovered from the device.
+    const cfg = { ...this._config, ...resolveEntities(hass, this._config) };
     const progress = stateOf(hass, cfg.progress_entity);
 
     if (!progress) {
-      this._body.innerHTML = `<div class="unavailable">Entity not found: ${cfg.progress_entity}</div>`;
+      const msg = cfg.progress_entity
+        ? `Entity not found: ${cfg.progress_entity}`
+        : "No Sourdough Fermentation device selected — edit the card and pick one.";
+      this._body.innerHTML = `<div class="unavailable">${msg}</div>`;
       return;
     }
 
@@ -498,9 +590,84 @@ class SourdoughFermentationCard extends HTMLElement {
 
 customElements.define("sourdough-fermentation-card", SourdoughFermentationCard);
 
+/**
+ * Visual editor shown in the dashboard card UI.
+ *
+ * Uses Home Assistant's own <ha-form> with a device selector filtered to this
+ * integration, so configuring the card is picking one device from a dropdown
+ * rather than typing out a dozen entity IDs.
+ */
+const EDITOR_SCHEMA = [
+  {
+    name: "device_id",
+    required: true,
+    selector: { device: { integration: "sourdough_ferment" } },
+  },
+  { name: "title", selector: { text: {} } },
+];
+
+const EDITOR_LABELS = {
+  device_id: "Sourdough device",
+  title: "Card title (optional)",
+};
+
+class SourdoughFermentationCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this._config = {};
+    this._hass = null;
+    this._form = null;
+  }
+
+  setConfig(config) {
+    this._config = config || {};
+    this._update();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._update();
+  }
+
+  connectedCallback() {
+    this._update();
+  }
+
+  _update() {
+    if (!this._hass) return;
+
+    if (!this._form) {
+      this._form = document.createElement("ha-form");
+      this._form.computeLabel = (schema) => EDITOR_LABELS[schema.name] || schema.name;
+      this._form.addEventListener("value-changed", (ev) => {
+        ev.stopPropagation();
+        this.dispatchEvent(
+          new CustomEvent("config-changed", {
+            detail: { config: ev.detail.value },
+            bubbles: true,
+            composed: true,
+          })
+        );
+      });
+      this.appendChild(this._form);
+    }
+
+    this._form.hass = this._hass;
+    this._form.schema = EDITOR_SCHEMA;
+    this._form.data = this._config;
+  }
+}
+
+customElements.define(
+  "sourdough-fermentation-card-editor",
+  SourdoughFermentationCardEditor
+);
+
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "sourdough-fermentation-card",
   name: "Sourdough Fermentation Card",
   description: "A rising-dough dashboard card for the Sourdough Fermentation integration.",
+  preview: true,
+  documentationURL: "https://github.com/bannon52/sourdough_bulk_fermenter",
 });
