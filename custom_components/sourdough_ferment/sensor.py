@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from homeassistant.components.sensor import (
     RestoreSensor,
@@ -38,6 +38,7 @@ async def async_setup_entry(
         [
             BulkFermentTimeSensor(coordinator, entry),
             FermentRateSensor(coordinator, entry),
+            FinishIfStartedNowSensor(coordinator, entry),
             HydrationSensor(coordinator, entry),
             BulkProgressSensor(coordinator, entry),
             BulkRemainingSensor(coordinator, entry),
@@ -137,6 +138,42 @@ class FermentRateSensor(_BaseFermentSensor):
     @property
     def native_value(self) -> float | None:
         return self._data.get("rate_per_hour")
+
+
+class FinishIfStartedNowSensor(_BaseFermentSensor):
+    """Projected finish time if bulk were started this instant.
+
+    This is independent of the actual countdown (see BulkReadyAtSensor for
+    that) -- it's simply 'now + current bulk_hours estimate', so it answers
+    "if I mixed right now, what time would it be ready?" It updates live as
+    temperature, humidity or the recipe changes, even while no timer is
+    running.
+    """
+
+    _attr_icon = "mdi:clock-plus-outline"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(self, coordinator, entry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_finish_if_started_now"
+        self._attr_name = "Finish time if started now"
+
+    @property
+    def native_value(self) -> datetime | None:
+        hours = self._data.get("hours")
+        if hours is None:
+            return None
+        return dt_util.utcnow() + timedelta(hours=hours)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        if not self._data.get("available"):
+            return {}
+        return {
+            "bulk_hours": self._data["hours"],
+            "temperature_used_c": self._data["temp_used_c"],
+            "temperature_source": self._data["temp_source"],
+        }
 
 
 class HydrationSensor(_BaseFermentSensor):
@@ -270,7 +307,12 @@ class BulkRemainingSensor(_BaseTimerSensor):
 
 
 class BulkReadyAtSensor(_BaseTimerSensor):
-    """Projected completion time (updates as temperature changes)."""
+    """Projected completion time for the ACTIVE countdown.
+
+    Only populated while Start bulk has been pressed and the timer is
+    running -- it re-forecasts from accumulated progress + current rate.
+    For a projection with no timer running, see 'Finish time if started now'.
+    """
 
     _attr_icon = "mdi:clock-check-outline"
     _attr_device_class = SensorDeviceClass.TIMESTAMP

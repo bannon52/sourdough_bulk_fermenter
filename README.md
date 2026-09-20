@@ -47,10 +47,25 @@ speeds up; when it cools it slows down. This surfaces as:
 - `sensor.<name>_bulk_time_remaining` (h) — re-forecast every tick from the
   *current* conditions.
 - `sensor.<name>_bulk_ready_at` (timestamp) — projected finish, great for a
-  notification automation ("dough ready at 6:42 PM").
+  notification automation ("dough ready at 6:42 PM"). Only populated while
+  the timer is running (after **Start bulk**); it re-forecasts from
+  accumulated progress plus the current rate.
 
 The accumulator ticks every 60 s and also on every temperature change. Progress
 hits 100% when the integrated rate says the bulk is complete.
+
+## Finish time if started now
+
+`sensor.<name>_finish_if_started_now` (timestamp) answers a different
+question: *"if I mixed the dough this instant, what time would it be ready?"*
+It's always available (no need to press Start) and simply projects
+`now + current bulk_hours estimate` from live temperature, humidity and
+recipe values — handy for deciding whether to start bulk tonight or wait
+until morning. Its attributes include the underlying hours estimate and which
+temperature source was used.
+
+This is distinct from `bulk_ready_at` above, which only reflects a fermentation
+that has actually been started and tracks its accumulated progress.
 
 ## Total hydration output
 

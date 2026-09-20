@@ -1,11 +1,13 @@
 {
   "domain": "sourdough_ferment",
   "name": "Sourdough Fermentation",
-  "codeowners": ["@zac"],
+  "codeowners": [
+    "@zac"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/zac/ha-sourdough-ferment",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/zac/ha-sourdough-ferment/issues",
   "requirements": [],
-  "version": "0.1.0"
+  "version": "1.2.0"
 }
