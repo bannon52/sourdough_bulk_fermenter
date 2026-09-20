@@ -67,6 +67,22 @@ temperature source was used.
 This is distinct from `bulk_ready_at` above, which only reflects a fermentation
 that has actually been started and tracks its accumulated progress.
 
+## Clock-time attribute (dashboard-friendly)
+
+`timestamp` sensors render as a full date/time by default in most dashboard
+cards. For a plain `9:20 PM`-style display with no templating, both
+`finish_if_started_now` and `bulk_ready_at` carry a `clock` attribute with
+just the time. In a Markdown card:
+
+```yaml
+type: markdown
+content: >
+  Ready at: **{{ state_attr('sensor.<name>_bulk_ready_at', 'clock') }}**
+```
+
+`clock` is `null` when the underlying timestamp isn't available yet (e.g.
+before the timer has been started).
+
 ## Total hydration output
 
 `sensor.<name>_total_hydration` reports **true** hydration, including the flour
@@ -125,6 +141,52 @@ directory and restart.
 *Settings → Devices & Services → Add Integration → Sourdough Fermentation.*
 Pick your room temp sensor (required), optionally a dough probe and humidity
 sensor, and set your starter ratio. Change any of it later via *Configure*.
+
+## Dashboard card
+
+The integration ships its own Lovelace card — a rising-dough visual that
+shows status, the ready-at/finish-if-started-now projections, an always-visible
+starter slider, and Start/Reset buttons, all in one card instead of stitching
+several generic cards together.
+
+It's registered automatically — no manual step under *Settings → Dashboards →
+Resources*. After updating, a normal browser refresh picks it up (a
+version-tagged cache-buster is appended to the script URL, so you don't need
+to hard-refresh).
+
+Add it to a dashboard in YAML mode:
+
+```yaml
+type: custom:sourdough-fermentation-card
+title: Sourdough Bulk
+progress_entity: sensor.sourdough_bulk_bulk_progress
+ready_at_entity: sensor.sourdough_bulk_bulk_ready_at
+finish_now_entity: sensor.sourdough_bulk_finish_if_started_now
+remaining_entity: sensor.sourdough_bulk_bulk_time_remaining
+starter_entity: number.sourdough_bulk_starter
+flour_entity: number.sourdough_bulk_flour
+water_entity: number.sourdough_bulk_water
+hydration_entity: sensor.sourdough_bulk_total_hydration
+start_entity: button.sourdough_bulk_start_bulk
+reset_entity: button.sourdough_bulk_reset_bulk
+```
+
+Adjust the entity IDs to match your config entry's name (check under
+*Developer Tools → States* if unsure). Only `progress_entity` is required —
+every other field is optional, and the card hides the corresponding control
+if you leave it out (e.g. omit `start_entity`/`reset_entity` for a read-only
+card).
+
+The card shows:
+- **Idle** — the dough dome empty, with "if started now" and estimated bulk
+  time as a preview before you commit to starting
+- **Fermenting** — the dome fills to match progress %, with small bubbles
+  animating, and "ready at" / "remaining" ticking down live
+- **Ready** — a warm gold glow replaces the crust-amber fill
+
+Starter gets its own always-visible slider since it's the value you're most
+likely to change bake-to-bake; flour and water live in a collapsible recipe
+row underneath since those tend to stay fixed.
 
 ## Bonus: cumulative progress tracker
 

@@ -9,6 +9,9 @@ from homeassistant.const import Platform
 DOMAIN = "sourdough_ferment"
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NUMBER, Platform.BUTTON]
 
+# Frontend card registration
+FRONTEND_SCRIPT_URL = "/sourdough_ferment_static/sourdough-card.js"
+
 # Signal fired when recipe/timer state changes, so sensors recalc immediately.
 SIGNAL_UPDATE = f"{DOMAIN}_update"
 
