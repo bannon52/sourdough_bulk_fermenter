@@ -192,12 +192,13 @@ discovered simply hides that part of the card (e.g. leave out
   time as a preview before you commit
 - **Fermenting** — the dough rises from its starting level to fill the dome at
   100%, bubbles animating, with "ready at" and remaining time updating live
-- **Ready** — a warm gold glow replaces the crust-amber fill
+- **Ready** — a warm gold glow replaces the crust-amber fill, a "He has risen!"
+  banner appears (dismiss it with "He has risen indeed"; remembered per device,
+  per bake), and the stats show when bulk finished and how long ago
 
 Tap either stat box to open its history graph, or the dome for progress
-history. A chip row under the dome shows the temperature being used (and
-whether it comes from the dough probe or room sensor) plus humidity, dimmed
-when humidity isn't being applied; tap a chip for that sensor's history.
+history. Under the status badge, the temperature and humidity in use are shown
+(humidity dims when the dough probe takes over); tap either for that sensor's history.
 
 Starter has its own always-visible slider, with −/+ buttons for 1 g
 adjustments, since it's the value most likely to change bake-to-bake; flour
@@ -212,6 +213,15 @@ helper over `sensor.<name>_fermentation_rate` (unit `1/h`, time unit hours). The
 running total climbs toward **1.0 (100%)** as the dough ferments — reset it when
 you mix a new batch, and you get a live "percent through bulk" readout that
 correctly accounts for temperature swings during the rise.
+
+## Notifications
+
+Under *Settings → Devices & Services → Sourdough Fermentation → Configure*,
+pick any notify targets (phones, the HA sidebar, etc.) under *Notify when bulk
+finishes*. Each gets one "He has risen!" alert when bulk completes, plus a
+one-off heads-up when about 30 minutes remain (adjust with *Heads-up before
+finish*, or set it to 0 to turn it off). The heads-up is skipped for bakes that
+start with less than that much time to go.
 
 ## Icon
 

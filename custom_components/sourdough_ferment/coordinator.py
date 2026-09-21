@@ -12,6 +12,7 @@ under whatever conditions currently hold, so the ETA re-forecasts continuously.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 
 from homeassistant.config_entries import ConfigEntry
@@ -23,6 +24,11 @@ from homeassistant.util import dt as dt_util
 from .calc import ModelParams, bulk_hours, rate_per_hour
 from .const import (
     CONF_BASE_HOURS,
+    CONF_HEADS_UP_MINUTES,
+    CONF_NOTIFY_SERVICES,
+    DEFAULT_HEADS_UP_MINUTES,
+    NOTIFY_MESSAGE,
+    NOTIFY_TITLE_FALLBACK,
     CONF_DOUGH_PROBE,
     CONF_FLOUR_G,
     CONF_HUMIDITY,
@@ -57,6 +63,8 @@ from .const import (
 )
 
 
+_LOGGER = logging.getLogger(__name__)
+
 class SourdoughCoordinator:
     """Central object shared by the sensor, number and button platforms."""
 
@@ -68,6 +76,13 @@ class SourdoughCoordinator:
         self.room_temp_id: str | None = cfg.get(CONF_ROOM_TEMP)
         self.dough_probe_id: str | None = cfg.get(CONF_DOUGH_PROBE)
         self.humidity_id: str | None = cfg.get(CONF_HUMIDITY)
+        self.notify_services: list[str] = list(cfg.get(CONF_NOTIFY_SERVICES) or [])
+        self.heads_up_minutes: float = float(
+            cfg.get(CONF_HEADS_UP_MINUTES, DEFAULT_HEADS_UP_MINUTES) or 0
+        )
+        # Heads-up state: sent once per bake; "checked" guards the first tick.
+        self.heads_up_sent: bool = False
+        self._heads_up_checked: bool = False
         self.use_humidity: bool = bool(cfg.get(CONF_USE_HUMIDITY, DEFAULT_USE_HUMIDITY))
 
         # Live recipe values (seeded from config; number entities update them)
@@ -224,6 +239,8 @@ class SourdoughCoordinator:
         self.progress = 0.0
         self.started_at = now
         self.completed_at = None
+        self.heads_up_sent = False
+        self._heads_up_checked = False
         self._last_tick = now
         self._notify()
 
@@ -234,6 +251,8 @@ class SourdoughCoordinator:
         self.progress = 0.0
         self.started_at = None
         self.completed_at = None
+        self.heads_up_sent = False
+        self._heads_up_checked = False
         self._last_tick = None
         self._notify()
 
@@ -244,12 +263,16 @@ class SourdoughCoordinator:
         active: bool,
         started_at: datetime | None,
         completed_at: datetime | None,
+        heads_up_sent: bool = False,
     ) -> None:
         """Rehydrate accumulator state after a restart."""
         self.progress = max(0.0, min(progress, 1.0))
         self.active = active
         self.started_at = started_at
         self.completed_at = completed_at
+        self.heads_up_sent = heads_up_sent
+        # Mid-bake restore: evaluate normally (don't treat it as a fresh start).
+        self._heads_up_checked = True
         # Don't credit downtime (unknown temps): resume from now.
         self._last_tick = dt_util.utcnow() if active else None
 
@@ -274,7 +297,52 @@ class SourdoughCoordinator:
             if self.progress >= 1.0:
                 self.active = False
                 self.completed_at = now
+                self._send_notifications(NOTIFY_MESSAGE)
+            elif rate > 0:
+                self._check_heads_up((1.0 - self.progress) / rate, now)
         self._notify()
+
+    @callback
+    def _check_heads_up(self, remaining_h: float, now: datetime) -> None:
+        """Send a one-off 'nearly done' alert when the lead time is reached."""
+        if self.heads_up_minutes <= 0 or self.heads_up_sent:
+            return
+        remaining_min = remaining_h * 60.0
+        if not self._heads_up_checked:
+            self._heads_up_checked = True
+            if remaining_min <= self.heads_up_minutes:
+                # Bake started with less than the lead time left: skip the
+                # alert rather than send "30 minutes left" right after Start.
+                self.heads_up_sent = True
+                return
+        if remaining_min <= self.heads_up_minutes:
+            self.heads_up_sent = True
+            ready = dt_util.as_local(now + timedelta(hours=remaining_h))
+            hour = ready.hour % 12 or 12
+            clock = f"{hour}:{ready.minute:02d} {'AM' if ready.hour < 12 else 'PM'}"
+            mins = max(1, round(remaining_min))
+            self._send_notifications(
+                f"Nearly there: about {mins} minutes left. Ready around {clock}."
+            )
+
+    @callback
+    def _send_notifications(self, message: str) -> None:
+        """Send a message to every selected notify target."""
+        for service in self.notify_services:
+            self.hass.async_create_task(self._async_notify_one(service, message))
+
+    async def _async_notify_one(self, service: str, message: str) -> None:
+        data = {
+            "title": self.entry.title or NOTIFY_TITLE_FALLBACK,
+            "message": message,
+        }
+        if service.startswith("mobile_app_"):
+            # Same tag -> a later notification replaces this one on the phone.
+            data["data"] = {"tag": f"sourdough_bulk_{self.entry.entry_id}"}
+        try:
+            await self.hass.services.async_call("notify", service, data, blocking=False)
+        except Exception as err:  # noqa: BLE001 - never let a notify failure break the timer
+            _LOGGER.warning("Sourdough: could not send notification via notify.%s: %s", service, err)
 
     def countdown_state(self) -> dict:
         """Current progress / remaining / ETA for the timer sensors."""

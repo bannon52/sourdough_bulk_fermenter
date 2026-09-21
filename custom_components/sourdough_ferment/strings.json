@@ -39,10 +39,14 @@
           "q10": "Q10 (rate multiplier per +10 °C)",
           "ref_temp": "Reference temperature (°C)",
           "base_hours": "Base bulk time at reference conditions (h)",
-          "starter_hydration_pct": "Starter hydration (%)"
+          "starter_hydration_pct": "Starter hydration (%)",
+          "notify_services": "Notify when bulk finishes",
+          "heads_up_minutes": "Heads-up before finish (minutes)"
         },
         "data_description": {
-          "starter_hydration_pct": "Water÷flour of your starter. 100% = equal parts (default). Used to compute true total hydration."
+          "starter_hydration_pct": "Water÷flour of your starter. 100% = equal parts (default). Used to compute true total hydration.",
+          "notify_services": "Devices to alert with \"He has risen!\" when bulk fermentation completes.",
+          "heads_up_minutes": "Also alert the targets above when this much time is left. Set to 0 to turn off."
         }
       }
     }

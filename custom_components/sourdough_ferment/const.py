@@ -31,6 +31,12 @@ CONF_FLOUR_G = "flour_g"
 CONF_WATER_G = "water_g"
 CONF_PROTEIN = "protein_pct"
 CONF_STARTER_HYDRATION = "starter_hydration_pct"
+CONF_NOTIFY_SERVICES = "notify_services"
+CONF_HEADS_UP_MINUTES = "heads_up_minutes"
+DEFAULT_HEADS_UP_MINUTES = 30
+
+NOTIFY_TITLE_FALLBACK = "Sourdough"
+NOTIFY_MESSAGE = "He has risen! Bulk fermentation is complete."
 
 # Advanced model params (options)
 CONF_Q10 = "q10"

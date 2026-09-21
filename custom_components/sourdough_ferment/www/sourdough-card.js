@@ -68,6 +68,15 @@
     node.dispatchEvent(ev);
   }
 
+  var RISEN_KEY = "sourdough-risen-dismissed:";
+  function storeGet(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } }
+  function storeSet(k, v) { try { window.localStorage.setItem(k, v); } catch (e) { /* private mode */ } }
+
+  function localClock(d) {
+    var h = d.getHours(), m = d.getMinutes();
+    return (h % 12 || 12) + ":" + (m < 10 ? "0" : "") + m + " " + (h < 12 ? "AM" : "PM");
+  }
+
   function isNum(v) { return typeof v === "number" && !isNaN(v); }
   function pick(v, f) { return v === undefined || v === null ? f : v; }
   function attr(s, n) { return s && s.attributes ? s.attributes[n] : undefined; }
@@ -147,11 +156,20 @@
     ".tap{cursor:pointer;-webkit-tap-highlight-color:transparent;transition:filter .15s;}" +
     ".tap:hover{filter:brightness(1.12);}" +
     ".tap:active{filter:brightness(1.25);}" +
-    ".env{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:10px;}" +
-    ".chip{display:flex;align-items:center;gap:6px;background:var(--sf-recessed);border-radius:100px;padding:5px 12px 5px 9px;font-size:13px;color:var(--sf-text);}" +
-    ".chip svg{width:15px;height:15px;flex-shrink:0;}" +
-    ".chip .src{color:var(--sf-muted);}" +
-    ".chip.off{color:var(--sf-muted);}" +
+    ".header{align-items:flex-start !important;}" +
+    ".hdr-right{display:flex;flex-direction:column;align-items:flex-end;gap:7px;}" +
+    ".env-mini{display:flex;gap:10px;}" +
+    ".env-item{display:flex;align-items:center;gap:3px;font-size:12px;color:var(--sf-muted);}" +
+    ".env-item svg{width:13px;height:13px;}" +
+    ".env-item.off{opacity:.45;}" +
+    ".risen{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--sf-gold);color:#1c1710;border-radius:14px;padding:12px 12px 12px 16px;margin-bottom:14px;animation:sf-risen .5s ease-out;}" +
+    ".risen-text{font-size:17px;font-weight:500;}" +
+    ".risen-btn{display:flex;align-items:center;gap:6px;border:none;border-radius:10px;padding:8px 12px;background:rgba(28,23,16,.14);color:#1c1710;font-size:13px;font-weight:500;cursor:pointer;}" +
+    ".risen-btn:active{background:rgba(28,23,16,.24);}" +
+    "@keyframes sf-risen{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;}}" +
+    "@media (prefers-reduced-motion:reduce){.risen{animation:none;}}" +
+    ".nudge-btn.sm{width:26px;height:26px;font-size:15px;border-radius:8px;}" +
+    ".nudge-val{min-width:56px;text-align:center;}" +
     ".stat-label{display:flex;justify-content:space-between;align-items:center;}" +
     ".stat-label .hist{width:13px;height:13px;opacity:.55;}" +
     ".pill{font-size:12px;padding:4px 11px;border-radius:100px;font-weight:500;}" +
@@ -187,7 +205,7 @@
     ".recipe-detail{max-height:0;overflow:hidden;transition:max-height .25s ease;}" +
     ".recipe.open .recipe-detail{max-height:320px;}" +
     ".slider-row{padding:2px 2px 12px;display:flex;flex-direction:column;gap:10px;}" +
-    ".slider-label{display:flex;justify-content:space-between;font-size:13px;color:var(--sf-muted);}" +
+    ".slider-label{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--sf-muted);margin-bottom:2px;}" +
     ".slider-label b{color:var(--sf-text);font-weight:500;}" +
     ".actions{display:flex;gap:8px;padding-top:12px;border-top:1px solid var(--sf-line);margin-top:2px;}" +
     ".btn{flex:1;padding:11px 0;border-radius:11px;border:none;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;}" +
@@ -299,6 +317,12 @@
     this.el.setAttribute("aria-valuenow", this.value);
   };
 
+  function nudgeMarkup(name, noun) {
+    return '<div class="nudge"><button class="nudge-btn sm" data-r="' + name + 'Minus" aria-label="Less ' + noun + '">\u2212</button>' +
+      '<b class="nudge-val" data-r="' + name + 'Label"></b>' +
+      '<button class="nudge-btn sm" data-r="' + name + 'Plus" aria-label="More ' + noun + '">+</button></div>';
+  }
+
   function sliderMarkup(ref, label) {
     return '<div class="slider" data-r="' + ref + '" role="slider" tabindex="0" aria-label="' + label + '">' +
       '<div class="track"><div class="track-fill"></div></div><div class="thumb"></div></div>';
@@ -321,7 +345,9 @@
       this._status = "idle";
       this._fillTop = DOME_BASE;
       this._raf = null;
-      this._nudgeTimer = null;
+      this._nudgeTimers = {};
+      this._ticker = null;
+      this._risenKey = null;
       this._uid = Math.random().toString(36).slice(2, 9);
       this._reducedMotion = !!(window.matchMedia &&
         window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -341,8 +367,11 @@
     set hass(hass) { this._hass = hass; this._update(); }
     getCardSize() { return 7; }
 
-    connectedCallback() { this._syncAnimation(); }
-    disconnectedCallback() { this._stopAnimation(); }
+    connectedCallback() { this._syncAnimation(); this._syncTicker(); }
+    disconnectedCallback() {
+      this._stopAnimation();
+      if (this._ticker) { clearInterval(this._ticker); this._ticker = null; }
+    }
 
     static getConfigElement() {
       return document.createElement("sourdough-fermentation-card-editor");
@@ -394,8 +423,15 @@
       var h = CSS + '<div class="card">' +
         '<div class="unavailable" data-r="unavailable" style="display:none"></div>' +
         '<div data-r="main">' +
+        '<div class="risen" data-r="risen" style="display:none">' +
+        '<div class="risen-text">He has risen!</div>' +
+        '<button class="risen-btn" data-r="risenBtn">\u2713 He has risen indeed</button></div>' +
         '<div class="header"><div class="title"><span data-r="title"></span></div>' +
-        '<span class="pill idle" data-r="pill">Idle</span></div>' +
+        '<div class="hdr-right"><span class="pill idle" data-r="pill">Idle</span>' +
+        '<div class="env-mini">' +
+        '<span class="env-item tap" data-r="tempChip" style="display:none">' + ICON_TEMP + '<span data-r="tempVal"></span></span>' +
+        '<span class="env-item tap" data-r="humChip" style="display:none">' + ICON_HUM + '<span data-r="humVal"></span></span>' +
+        '</div></div></div>' +
         '<div class="dome-wrap"><svg class="dome-svg tap" data-r="dome" viewBox="0 0 200 160">' +
         '<defs><clipPath id="' + clip + '"><path d="' + DOME_PATH + '"/></clipPath></defs>' +
         '<path d="' + DOME_PATH + '" fill="#241d14"/>' +
@@ -404,20 +440,16 @@
         '<rect data-r="surface" x="0" y="' + DOME_BASE + '" width="200" height="0" fill="#e6b04a"/>' +
         '<g data-r="bubbles"></g></g>' +
         '<path d="' + DOME_PATH + '" fill="none" stroke="#4a3d2a" stroke-width="3"/>' +
-        '</svg><div class="dome-caption" data-r="caption"></div>' +
-        '<div class="env">' +
-        '<div class="chip tap" data-r="tempChip" style="display:none">' + ICON_TEMP + '<span data-r="tempVal"></span><span class="src" data-r="tempSrc"></span></div>' +
-        '<div class="chip tap" data-r="humChip" style="display:none">' + ICON_HUM + '<span data-r="humVal"></span><span class="src" data-r="humSrc"></span></div>' +
-        '</div></div>' +
+        '</svg><div class="dome-caption" data-r="caption"></div></div>' +
         '<div class="stats">' +
         '<div class="stat tap" data-r="s1"><div class="stat-label"><span data-r="l1"></span>' + ICON_HIST + '</div><div class="stat-value" data-r="v1"></div></div>' +
         '<div class="stat tap" data-r="s2"><div class="stat-label"><span data-r="l2"></span>' + ICON_HIST + '</div><div class="stat-value" data-r="v2"></div></div></div>';
 
       if (e.starter_entity) {
         h += '<div class="control"><div class="control-row"><span>Starter</span>' +
-          '<div class="nudge"><button class="nudge-btn" data-r="minus" aria-label="Less starter">\u2212</button>' +
+          '<div class="nudge"><button class="nudge-btn" data-r="starterMinus" aria-label="Less starter">\u2212</button>' +
           '<span class="starter-val" data-r="starterLabel"></span>' +
-          '<button class="nudge-btn" data-r="plus" aria-label="More starter">+</button></div></div>' +
+          '<button class="nudge-btn" data-r="starterPlus" aria-label="More starter">+</button></div></div>' +
           sliderMarkup("starterSlider", "Starter") + '</div>';
       }
 
@@ -426,10 +458,10 @@
           '<div class="recipe-summary" data-r="recipeSummary"><div class="recipe-text" data-r="recipeText"></div>' +
           '<span class="chevron">\u25BE</span></div><div class="recipe-detail"><div class="slider-row">';
         if (e.flour_entity) {
-          h += '<div><div class="slider-label">Flour <b data-r="flourLabel"></b></div>' + sliderMarkup("flourSlider", "Flour") + '</div>';
+          h += '<div><div class="slider-label"><span>Flour</span>' + nudgeMarkup("flour", "flour") + '</div>' + sliderMarkup("flourSlider", "Flour") + '</div>';
         }
         if (e.water_entity) {
-          h += '<div><div class="slider-label">Water <b data-r="waterLabel"></b></div>' + sliderMarkup("waterSlider", "Water") + '</div>';
+          h += '<div><div class="slider-label"><span>Water</span>' + nudgeMarkup("water", "water") + '</div>' + sliderMarkup("waterSlider", "Water") + '</div>';
         }
         h += '</div></div></div>';
       }
@@ -466,8 +498,14 @@
       this._makeSlider("water", "waterSlider", "waterLabel");
 
       var self = this;
-      if (refs.minus) refs.minus.addEventListener("click", function () { self._nudge(-1); });
-      if (refs.plus) refs.plus.addEventListener("click", function () { self._nudge(1); });
+      ["starter", "flour", "water"].forEach(function (n) {
+        if (refs[n + "Minus"]) refs[n + "Minus"].addEventListener("click", function () { self._nudge(n, -1); });
+        if (refs[n + "Plus"]) refs[n + "Plus"].addEventListener("click", function () { self._nudge(n, 1); });
+      });
+      refs.risenBtn.addEventListener("click", function () {
+        if (self._risenKey) storeSet(RISEN_KEY + self._ents.progress_entity, self._risenKey);
+        refs.risen.style.display = "none";
+      });
       if (refs.recipeSummary) {
         refs.recipeSummary.addEventListener("click", function () {
           self._recipeOpen = !self._recipeOpen;
@@ -501,19 +539,19 @@
       this._hass.callService("number", "set_value", { entity_id: entityId, value: value });
     }
 
-    _nudge(dir) {
-      var s = this._sliders.starter;
+    _nudge(name, dir) {
+      var s = this._sliders[name];
       if (!s) return;
       var v = clamp(roundTo(s.value + dir * s.step, s.step), s.min, s.max);
       s.value = v; s._paint();
-      this._refs.starterLabel.textContent = fmtGrams(v);
+      this._refs[name + "Label"].textContent = fmtGrams(v);
       // Debounce so rapid taps send one update, not ten.
       var self = this;
-      if (this._nudgeTimer) clearTimeout(this._nudgeTimer);
-      PENDING[this._ents.starter_entity] = { value: v, at: Date.now() };
-      this._nudgeTimer = setTimeout(function () {
-        self._nudgeTimer = null;
-        self._commit("starter", s.value);
+      if (this._nudgeTimers[name]) clearTimeout(this._nudgeTimers[name]);
+      PENDING[this._ents[name + "_entity"]] = { value: v, at: Date.now() };
+      this._nudgeTimers[name] = setTimeout(function () {
+        self._nudgeTimers[name] = null;
+        self._commit(name, s.value);
       }, NUDGE_COMMIT_MS);
     }
 
@@ -570,9 +608,27 @@
         l1 = "Ready at"; v1 = pick(attr(readyAt, "clock"), "\u2014");
         l2 = "Remaining"; v2 = formatHours(num(remaining));
       } else {
-        l1 = "Finished at"; v1 = pick(attr(readyAt, "clock"), "\u2014");
-        l2 = "Status"; v2 = "Done"; dim = true;
+        // The ready-at sensor clears once the timer stops, so work from the
+        // actual completion time instead.
+        var done = attr(progress, "completed_at");
+        var doneAt = done ? new Date(done) : null;
+        if (doneAt && isNaN(doneAt.getTime())) doneAt = null;
+        l1 = "Finished at";
+        v1 = doneAt ? localClock(doneAt) : pick(attr(readyAt, "clock"), "\u2014");
+        l2 = "Since finished";
+        if (doneAt) {
+          var since = Math.max(0, (Date.now() - doneAt.getTime()) / 3600000);
+          v2 = since < 1 / 60 ? "Just now" : formatHours(since);
+        } else {
+          v2 = "Done"; dim = true;
+        }
       }
+
+      // "He has risen!" banner, once per completed bake, dismissible per device.
+      var risenKey = status === "ready" ? (attr(progress, "completed_at") || null) : null;
+      this._risenKey = risenKey;
+      var showRisen = !!risenKey && storeGet(RISEN_KEY + e.progress_entity) !== risenKey;
+      r.risen.style.display = showRisen ? "" : "none";
       r.l1.textContent = l1; r.v1.textContent = v1;
       r.l2.textContent = l2; r.v2.textContent = v2;
       r.v2.className = "stat-value" + (dim ? " dim" : "");
@@ -608,6 +664,17 @@
 
       this._status = status;
       this._syncAnimation();
+      this._syncTicker();
+    }
+
+    _syncTicker() {
+      var want = this._status === "ready" && this.isConnected;
+      var self = this;
+      if (want && !this._ticker) {
+        this._ticker = setInterval(function () { if (self._hass) self._fill(); }, 30000);
+      } else if (!want && this._ticker) {
+        clearInterval(this._ticker); this._ticker = null;
+      }
     }
 
     _fillEnv() {
@@ -616,8 +683,8 @@
       var temp = attr(bulk, "temperature_used_c");
       if (isNum(temp)) {
         r.tempChip.style.display = "";
-        r.tempVal.textContent = temp.toFixed(1) + " \u00B0C";
-        r.tempSrc.textContent = attr(bulk, "temperature_source") === "dough_probe" ? "dough" : "room";
+        r.tempVal.textContent = temp.toFixed(1) + "\u00B0C";
+        r.tempChip.title = attr(bulk, "temperature_source") === "dough_probe" ? "Dough probe temperature" : "Room temperature";
         t.tempChip = attr(bulk, "temperature_entity");
       } else {
         r.tempChip.style.display = "none";
@@ -626,9 +693,9 @@
       if (isNum(hum)) {
         var applied = attr(bulk, "humidity_applied") === true;
         r.humChip.style.display = "";
-        r.humChip.className = "chip tap" + (applied ? "" : " off");
+        r.humChip.className = "env-item tap" + (applied ? "" : " off");
         r.humVal.textContent = Math.round(hum) + "%";
-        r.humSrc.textContent = applied ? "humidity" : "not used";
+        r.humChip.title = applied ? "Humidity" : "Humidity (not used while the dough probe is active)";
         t.humChip = attr(bulk, "humidity_entity");
       } else {
         r.humChip.style.display = "none";
@@ -647,7 +714,7 @@
         parseFloat(pick(attr(stateObj, "step"), dStep)));
 
       if (slider.dragging) return;
-      if (name === "starter" && this._nudgeTimer) return; // mid-nudge
+      if (this._nudgeTimers[name]) return; // mid-nudge
 
       var value = num(stateObj);
       var pending = PENDING[entityId];

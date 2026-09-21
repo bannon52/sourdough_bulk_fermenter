@@ -16,6 +16,9 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_HEADS_UP_MINUTES,
+    DEFAULT_HEADS_UP_MINUTES,
+    CONF_NOTIFY_SERVICES,
     CONF_BASE_HOURS,
     CONF_DOUGH_PROBE,
     CONF_FLOUR_G,
@@ -132,6 +135,54 @@ def _advanced_schema(d: dict[str, Any]) -> dict:
     }
 
 
+# notify.* actions that aren't useful targets for a plain message.
+_NOTIFY_EXCLUDE = {"send_message"}
+
+
+def _notify_label(service: str) -> str:
+    if service.startswith("mobile_app_"):
+        return "Mobile app: " + service[len("mobile_app_"):].replace("_", " ")
+    if service == "notify":
+        return "Default notify group"
+    if service == "persistent_notification":
+        return "Home Assistant notification (sidebar)"
+    return service.replace("_", " ").capitalize()
+
+
+def _notify_schema(hass, d: dict[str, Any]) -> dict:
+    """Multi-select of available notify targets, for the 'risen' alert."""
+    available = sorted(
+        s for s in hass.services.async_services().get("notify", {})
+        if s not in _NOTIFY_EXCLUDE
+    )
+    selected = list(d.get(CONF_NOTIFY_SERVICES) or [])
+    # Keep previously chosen targets selectable even if currently unavailable.
+    for s in selected:
+        if s not in available:
+            available.append(s)
+    return {
+        vol.Optional(CONF_NOTIFY_SERVICES, default=selected): selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[
+                    selector.SelectOptionDict(value=s, label=_notify_label(s))
+                    for s in available
+                ],
+                multiple=True,
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        ),
+        vol.Optional(
+            CONF_HEADS_UP_MINUTES,
+            default=d.get(CONF_HEADS_UP_MINUTES, DEFAULT_HEADS_UP_MINUTES),
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0, max=120, step=5, unit_of_measurement="min",
+                mode=selector.NumberSelectorMode.BOX,
+            )
+        ),
+    }
+
+
 class SourdoughConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle the initial UI setup."""
 
@@ -166,5 +217,9 @@ class SourdoughOptionsFlow(OptionsFlow):
             return self.async_create_entry(title="", data=user_input)
 
         current = {**self.config_entry.data, **self.config_entry.options}
-        schema = _base_schema(current).extend(_advanced_schema(current))
+        schema = (
+            _base_schema(current)
+            .extend(_notify_schema(self.hass, current))
+            .extend(_advanced_schema(current))
+        )
         return self.async_show_form(step_id="init", data_schema=schema)

@@ -292,6 +292,7 @@ class BulkProgressSensor(_BaseTimerSensor, RestoreSensor, RestoreEntity):
                 active=bool(a.get("active", False)),
                 started_at=_parse_dt(a.get("started_at")),
                 completed_at=_parse_dt(a.get("completed_at")),
+                heads_up_sent=bool(a.get("heads_up_sent", False)),
             )
         await super().async_added_to_hass()
 
@@ -305,6 +306,7 @@ class BulkProgressSensor(_BaseTimerSensor, RestoreSensor, RestoreEntity):
             "active": self._state.get("active", False),
             "started_at": _iso(self._state.get("started_at")),
             "completed_at": _iso(self._state.get("completed_at")),
+            "heads_up_sent": self._cfg.heads_up_sent,
         }
 
 
