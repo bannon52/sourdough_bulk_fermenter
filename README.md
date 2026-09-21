@@ -190,9 +190,14 @@ discovered simply hides that part of the card (e.g. leave out
 
 - **Idle** — an empty dough dome, with "if started now" and estimated bulk
   time as a preview before you commit
-- **Fermenting** — the dome fills to match progress, bubbles animating, with
-  "ready at" and remaining time updating live
+- **Fermenting** — the dough rises from its starting level to fill the dome at
+  100%, bubbles animating, with "ready at" and remaining time updating live
 - **Ready** — a warm gold glow replaces the crust-amber fill
+
+Tap either stat box to open its history graph, or the dome for progress
+history. A chip row under the dome shows the temperature being used (and
+whether it comes from the dough probe or room sensor) plus humidity, dimmed
+when humidity isn't being applied; tap a chip for that sensor's history.
 
 Starter has its own always-visible slider, with −/+ buttons for 1 g
 adjustments, since it's the value most likely to change bake-to-bake; flour

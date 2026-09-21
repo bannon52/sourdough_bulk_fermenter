@@ -129,6 +129,9 @@ class BulkFermentTimeSensor(_BaseFermentSensor):
         return {
             "temperature_used_c": self._data["temp_used_c"],
             "temperature_source": self._data["temp_source"],
+            "temperature_entity": self._data["temp_entity"],
+            "humidity_percent": self._data["humidity_pct"],
+            "humidity_entity": self._data["humidity_entity"],
             "humidity_applied": self._data["humidity_applied"],
             "starter_percent": self._data["starter_pct"],
             "hydration_percent": self._data["hydration_pct"],

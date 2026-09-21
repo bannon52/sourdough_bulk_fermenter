@@ -194,12 +194,20 @@ class SourdoughCoordinator:
             else "slow" if hours > SLOW_THRESHOLD_H
             else "normal"
         )
+        humidity_reading = self._read_float(self.humidity_id)
         return {
             "available": True,
             "hours": round(hours, 2),
             "rate_per_hour": round(rate, 5),
             "temp_used_c": round(temp, 1),
             "temp_source": source,
+            "temp_entity": (
+                self.dough_probe_id if source == "dough_probe" else self.room_temp_id
+            ),
+            "humidity_pct": (
+                round(humidity_reading, 1) if humidity_reading is not None else None
+            ),
+            "humidity_entity": self.humidity_id,
             "humidity_applied": hum_arg is not None,
             "starter_pct": round(self.starter_ratio * 100, 1),
             "hydration_pct": round(self.true_hydration_pct, 1),

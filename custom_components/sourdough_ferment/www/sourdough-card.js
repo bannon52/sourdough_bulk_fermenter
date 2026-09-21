@@ -22,6 +22,9 @@
   var DOME_PATH =
     "M14,150 L14,84 C14,42 46,14 100,14 C154,14 186,42 186,84 L186,150 Z";
   var PENDING_HOLD_MS = 5000;
+  // Dough is present from the start of bulk: the dome begins this full at 0%
+  // risen and fills completely at 100%.
+  var BASE_FRACTION = 0.4;
   var NUDGE_COMMIT_MS = 600;
   var SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -39,21 +42,31 @@
     flour_entity: ["_flour"],
     water_entity: ["_water"],
     start_entity: ["_start_bulk"],
-    reset_entity: ["_reset_bulk"]
+    reset_entity: ["_reset_bulk"],
+    bulk_time_entity: ["_bulk_fermentation_time"]
   };
   var ENTITY_KEYS = Object.keys(ENTITY_SUFFIXES);
   var LONGER_SIBLINGS = { _flour: ["_flour_protein"] };
 
   // Deterministic bubble layout (x in dome units, rise period s, phase s, radius)
   var BUBBLES = [
-    { x: 46, period: 3.4, phase: 0.0, r: 3.2 },
-    { x: 78, period: 4.1, phase: 1.3, r: 2.4 },
-    { x: 104, period: 3.0, phase: 2.2, r: 3.8 },
-    { x: 128, period: 3.7, phase: 0.6, r: 2.6 },
-    { x: 152, period: 4.4, phase: 2.9, r: 3.0 },
-    { x: 64, period: 2.8, phase: 3.5, r: 2.0 },
-    { x: 140, period: 3.2, phase: 1.8, r: 2.2 }
+    { x: 40, period: 3.4, phase: 0.0, r: 3.8 },
+    { x: 70, period: 4.1, phase: 1.3, r: 2.8 },
+    { x: 100, period: 3.0, phase: 2.2, r: 4.4 },
+    { x: 126, period: 3.7, phase: 0.6, r: 3.0 },
+    { x: 156, period: 4.4, phase: 2.9, r: 3.6 },
+    { x: 56, period: 2.8, phase: 3.5, r: 2.4 },
+    { x: 140, period: 3.2, phase: 1.8, r: 2.6 },
+    { x: 86, period: 3.9, phase: 0.9, r: 2.2 },
+    { x: 114, period: 2.6, phase: 3.1, r: 2.0 }
   ];
+
+  function fireMoreInfo(node, entityId) {
+    if (!entityId) return;
+    var ev = new Event("hass-more-info", { bubbles: true, composed: true });
+    ev.detail = { entityId: entityId };
+    node.dispatchEvent(ev);
+  }
 
   function isNum(v) { return typeof v === "number" && !isNaN(v); }
   function pick(v, f) { return v === undefined || v === null ? f : v; }
@@ -117,6 +130,10 @@
     return out;
   }
 
+  var ICON_TEMP = '<svg viewBox="0 0 24 24" fill="none" stroke="#d9974d" stroke-width="2" stroke-linecap="round"><path d="M10 13.5V5a2 2 0 1 1 4 0v8.5a4 4 0 1 1-4 0z"/><path d="M12 9v7"/></svg>';
+  var ICON_HUM = '<svg viewBox="0 0 24 24" fill="none" stroke="#d9974d" stroke-width="2" stroke-linejoin="round"><path d="M12 3.5c3 4 6 7.2 6 10.5a6 6 0 0 1-12 0c0-3.3 3-6.5 6-10.5z"/></svg>';
+  var ICON_HIST = '<svg class="hist" viewBox="0 0 24 24" fill="none" stroke="#a3937a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18l5-6 4 3 7-8"/></svg>';
+
   var CSS =
     "<style>" +
     ":host{--sf-bg:#1c1710;--sf-recessed:#241d14;--sf-line:#332a1c;--sf-crust:#d9974d;" +
@@ -127,7 +144,16 @@
     ".card{background:var(--sf-bg);border:1px solid var(--sf-line);border-radius:20px;padding:20px 20px 14px;color:var(--sf-text);}" +
     ".header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}" +
     ".title{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:500;}" +
-    ".jar{width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:var(--sf-recessed);border-radius:9px;font-size:15px;}" +
+    ".tap{cursor:pointer;-webkit-tap-highlight-color:transparent;transition:filter .15s;}" +
+    ".tap:hover{filter:brightness(1.12);}" +
+    ".tap:active{filter:brightness(1.25);}" +
+    ".env{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:10px;}" +
+    ".chip{display:flex;align-items:center;gap:6px;background:var(--sf-recessed);border-radius:100px;padding:5px 12px 5px 9px;font-size:13px;color:var(--sf-text);}" +
+    ".chip svg{width:15px;height:15px;flex-shrink:0;}" +
+    ".chip .src{color:var(--sf-muted);}" +
+    ".chip.off{color:var(--sf-muted);}" +
+    ".stat-label{display:flex;justify-content:space-between;align-items:center;}" +
+    ".stat-label .hist{width:13px;height:13px;opacity:.55;}" +
     ".pill{font-size:12px;padding:4px 11px;border-radius:100px;font-weight:500;}" +
     ".pill.idle{background:var(--sf-recessed);color:var(--sf-muted);}" +
     ".pill.fermenting{background:rgba(217,151,77,.16);color:var(--sf-crust);}" +
@@ -138,7 +164,7 @@
     ".dome-caption{margin-top:4px;font-size:13px;color:var(--sf-muted);}" +
     ".stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0;}" +
     ".stat{background:var(--sf-recessed);border-radius:12px;padding:10px 13px;}" +
-    ".stat-label{font-size:12px;color:var(--sf-muted);margin-bottom:3px;}" +
+    ".stat-label{font-size:12px;color:var(--sf-muted);margin-bottom:3px;gap:6px;}" +
     ".stat-value{font-size:20px;font-weight:500;line-height:1.25;}" +
     ".stat-value.dim{color:var(--sf-muted);font-size:15px;}" +
     ".control{background:var(--sf-recessed);border-radius:12px;padding:11px 14px 8px;margin-bottom:10px;}" +
@@ -340,7 +366,7 @@
       this._ents = ents;
       var key = [this._config.title || "", ents.progress_entity || "",
         ents.starter_entity ? 1 : 0, ents.flour_entity ? 1 : 0, ents.water_entity ? 1 : 0,
-        ents.start_entity ? 1 : 0, ents.reset_entity ? 1 : 0].join("|");
+        ents.start_entity ? 1 : 0, ents.reset_entity ? 1 : 0, ents.bulk_time_entity ? 1 : 0].join("|");
       if (key !== this._structureKey) {
         this._build();
         this._structureKey = key;
@@ -368,9 +394,9 @@
       var h = CSS + '<div class="card">' +
         '<div class="unavailable" data-r="unavailable" style="display:none"></div>' +
         '<div data-r="main">' +
-        '<div class="header"><div class="title"><span class="jar">\uD83C\uDF5E</span><span data-r="title"></span></div>' +
+        '<div class="header"><div class="title"><span data-r="title"></span></div>' +
         '<span class="pill idle" data-r="pill">Idle</span></div>' +
-        '<div class="dome-wrap"><svg class="dome-svg" data-r="dome" viewBox="0 0 200 160">' +
+        '<div class="dome-wrap"><svg class="dome-svg tap" data-r="dome" viewBox="0 0 200 160">' +
         '<defs><clipPath id="' + clip + '"><path d="' + DOME_PATH + '"/></clipPath></defs>' +
         '<path d="' + DOME_PATH + '" fill="#241d14"/>' +
         '<g clip-path="url(#' + clip + ')">' +
@@ -378,10 +404,14 @@
         '<rect data-r="surface" x="0" y="' + DOME_BASE + '" width="200" height="0" fill="#e6b04a"/>' +
         '<g data-r="bubbles"></g></g>' +
         '<path d="' + DOME_PATH + '" fill="none" stroke="#4a3d2a" stroke-width="3"/>' +
-        '</svg><div class="dome-caption" data-r="caption"></div></div>' +
+        '</svg><div class="dome-caption" data-r="caption"></div>' +
+        '<div class="env">' +
+        '<div class="chip tap" data-r="tempChip" style="display:none">' + ICON_TEMP + '<span data-r="tempVal"></span><span class="src" data-r="tempSrc"></span></div>' +
+        '<div class="chip tap" data-r="humChip" style="display:none">' + ICON_HUM + '<span data-r="humVal"></span><span class="src" data-r="humSrc"></span></div>' +
+        '</div></div>' +
         '<div class="stats">' +
-        '<div class="stat"><div class="stat-label" data-r="l1"></div><div class="stat-value" data-r="v1"></div></div>' +
-        '<div class="stat"><div class="stat-label" data-r="l2"></div><div class="stat-value" data-r="v2"></div></div></div>';
+        '<div class="stat tap" data-r="s1"><div class="stat-label"><span data-r="l1"></span>' + ICON_HIST + '</div><div class="stat-value" data-r="v1"></div></div>' +
+        '<div class="stat tap" data-r="s2"><div class="stat-label"><span data-r="l2"></span>' + ICON_HIST + '</div><div class="stat-value" data-r="v2"></div></div></div>';
 
       if (e.starter_entity) {
         h += '<div class="control"><div class="control-row"><span>Starter</span>' +
@@ -446,6 +476,12 @@
       }
       if (refs.startBtn) refs.startBtn.addEventListener("click", function () { self._press(self._ents.start_entity); });
       if (refs.resetBtn) refs.resetBtn.addEventListener("click", function () { self._press(self._ents.reset_entity); });
+
+      // Tap to open Home Assistant's more-info dialog (with history graph).
+      this._targets = {};
+      ["s1", "s2", "dome", "tempChip", "humChip"].forEach(function (k) {
+        refs[k].addEventListener("click", function () { fireMoreInfo(self, self._targets[k]); });
+      });
     }
 
     _makeSlider(name, sliderRef, labelRef) {
@@ -512,11 +548,13 @@
       var domeClass = "dome-svg " + status;
       if (r.dome.getAttribute("class") !== domeClass) r.dome.setAttribute("class", domeClass);
 
-      var fh = (pct / 100) * DOME_HEIGHT;
+      var frac = status === "idle" ? BASE_FRACTION : BASE_FRACTION + (1 - BASE_FRACTION) * (pct / 100);
+      var fh = frac * DOME_HEIGHT;
       this._fillTop = DOME_BASE - fh;
       r.fill.setAttribute("y", this._fillTop);
       r.fill.setAttribute("height", fh);
-      r.fill.setAttribute("fill", status === "ready" ? "#e6b04a" : "#d9974d");
+      r.fill.setAttribute("fill", status === "ready" ? "#e6b04a" : status === "idle" ? "#8a6a44" : "#d9974d");
+      r.surface.setAttribute("fill", status === "idle" ? "#a8835a" : "#e6b04a");
       r.surface.setAttribute("y", this._fillTop);
       r.surface.setAttribute("height", fh > 0 ? Math.min(4, fh) : 0);
       r.caption.textContent = status === "idle" ? "Not started" : pct.toFixed(0) + "% risen";
@@ -538,6 +576,13 @@
       r.l1.textContent = l1; r.v1.textContent = v1;
       r.l2.textContent = l2; r.v2.textContent = v2;
       r.v2.className = "stat-value" + (dim ? " dim" : "");
+
+      var t = this._targets;
+      if (status === "idle") { t.s1 = e.finish_now_entity; t.s2 = e.bulk_time_entity || e.finish_now_entity; }
+      else if (status === "fermenting") { t.s1 = e.ready_at_entity; t.s2 = e.remaining_entity; }
+      else { t.s1 = e.ready_at_entity; t.s2 = e.progress_entity; }
+      t.dome = e.progress_entity;
+      this._fillEnv();
 
       this._syncSlider("starter", "starterLabel", 0, 200, 1);
       this._syncSlider("flour", "flourLabel", 50, 1000, 5);
@@ -563,6 +608,31 @@
 
       this._status = status;
       this._syncAnimation();
+    }
+
+    _fillEnv() {
+      var r = this._refs, e = this._ents, t = this._targets;
+      var bulk = e.bulk_time_entity ? this._hass.states[e.bulk_time_entity] : undefined;
+      var temp = attr(bulk, "temperature_used_c");
+      if (isNum(temp)) {
+        r.tempChip.style.display = "";
+        r.tempVal.textContent = temp.toFixed(1) + " \u00B0C";
+        r.tempSrc.textContent = attr(bulk, "temperature_source") === "dough_probe" ? "dough" : "room";
+        t.tempChip = attr(bulk, "temperature_entity");
+      } else {
+        r.tempChip.style.display = "none";
+      }
+      var hum = attr(bulk, "humidity_percent");
+      if (isNum(hum)) {
+        var applied = attr(bulk, "humidity_applied") === true;
+        r.humChip.style.display = "";
+        r.humChip.className = "chip tap" + (applied ? "" : " off");
+        r.humVal.textContent = Math.round(hum) + "%";
+        r.humSrc.textContent = applied ? "humidity" : "not used";
+        t.humChip = attr(bulk, "humidity_entity");
+      } else {
+        r.humChip.style.display = "none";
+      }
     }
 
     _syncSlider(name, labelRef, dMin, dMax, dStep) {
@@ -593,8 +663,7 @@
 
     // --- bubbles: clock-driven, so they can never restart -----------------
     _syncAnimation() {
-      var want = this._status === "fermenting" && !this._reducedMotion && this.isConnected &&
-        (DOME_BASE - this._fillTop) > 14;
+      var want = this._status === "fermenting" && !this._reducedMotion && this.isConnected;
       if (want && !this._raf) this._raf = window.requestAnimationFrame(this._frame);
       if (!want) {
         this._stopAnimation();
@@ -622,7 +691,7 @@
         var el = this._bubbleEls[i];
         el.setAttribute("cx", (b.x + wobble).toFixed(1));
         el.setAttribute("cy", y.toFixed(1));
-        el.setAttribute("opacity", (op * 0.55).toFixed(2));
+        el.setAttribute("opacity", (op * 0.75).toFixed(2));
       }
       this._raf = window.requestAnimationFrame(this._frame);
     }
