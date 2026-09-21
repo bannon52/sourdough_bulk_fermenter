@@ -144,49 +144,58 @@ sensor, and set your starter ratio. Change any of it later via *Configure*.
 
 ## Dashboard card
 
-The integration ships its own Lovelace card — a rising-dough visual that
-shows status, the ready-at/finish-if-started-now projections, an always-visible
+The integration ships its own Lovelace card — a rising-dough visual showing
+status, the ready-at / finish-if-started-now projections, an always-visible
 starter slider, and Start/Reset buttons, all in one card instead of stitching
 several generic cards together.
 
-It's registered automatically — no manual step under *Settings → Dashboards →
-Resources*. After updating, a normal browser refresh picks it up (a
-version-tagged cache-buster is appended to the script URL, so you don't need
-to hard-refresh).
+It registers itself automatically — no manual step under *Settings →
+Dashboards → Resources*. After updating, a normal browser refresh picks it up.
 
-Add it to a dashboard in YAML mode:
+### Adding it
+
+*Edit dashboard → Add card → search "Sourdough"*. The card has a visual
+editor: pick your **Sourdough device** from the dropdown and you're done. It
+discovers its own entities from that device, so it works whatever you named
+the integration during setup.
+
+The equivalent YAML is just:
 
 ```yaml
 type: custom:sourdough-fermentation-card
-title: Sourdough Bulk
-progress_entity: sensor.sourdough_bulk_bulk_progress
-ready_at_entity: sensor.sourdough_bulk_bulk_ready_at
-finish_now_entity: sensor.sourdough_bulk_finish_if_started_now
-remaining_entity: sensor.sourdough_bulk_bulk_time_remaining
-starter_entity: number.sourdough_bulk_starter
-flour_entity: number.sourdough_bulk_flour
-water_entity: number.sourdough_bulk_water
-hydration_entity: sensor.sourdough_bulk_total_hydration
-start_entity: button.sourdough_bulk_start_bulk
-reset_entity: button.sourdough_bulk_reset_bulk
+device_id: <your device id>
+title: Sourdough Bulk    # optional
 ```
 
-Adjust the entity IDs to match your config entry's name (check under
-*Developer Tools → States* if unsure). Only `progress_entity` is required —
-every other field is optional, and the card hides the corresponding control
-if you leave it out (e.g. omit `start_entity`/`reset_entity` for a read-only
-card).
+### Overriding individual entities
 
-The card shows:
-- **Idle** — the dough dome empty, with "if started now" and estimated bulk
-  time as a preview before you commit to starting
-- **Fermenting** — the dome fills to match progress %, with small bubbles
-  animating, and "ready at" / "remaining" ticking down live
+Auto-discovery matches entities by their name suffix (`_bulk_progress`,
+`_starter`, and so on). If you've renamed an entity, or want the card to point
+somewhere else, set that key explicitly — anything you specify wins, and the
+rest is still discovered:
+
+```yaml
+type: custom:sourdough-fermentation-card
+device_id: <your device id>
+starter_entity: number.my_renamed_starter
+```
+
+Available keys: `progress_entity`, `ready_at_entity`, `finish_now_entity`,
+`remaining_entity`, `hydration_entity`, `starter_entity`, `flour_entity`,
+`water_entity`, `start_entity`, `reset_entity`. Omitting one that can't be
+discovered simply hides that part of the card (e.g. leave out
+`start_entity`/`reset_entity` for a read-only card).
+
+### What it shows
+
+- **Idle** — an empty dough dome, with "if started now" and estimated bulk
+  time as a preview before you commit
+- **Fermenting** — the dome fills to match progress, bubbles animating, with
+  "ready at" and remaining time updating live
 - **Ready** — a warm gold glow replaces the crust-amber fill
 
-Starter gets its own always-visible slider since it's the value you're most
-likely to change bake-to-bake; flour and water live in a collapsible recipe
-row underneath since those tend to stay fixed.
+Starter has its own always-visible slider since it's the value most likely to
+change bake-to-bake; flour and water sit in a collapsible row below.
 
 ## Bonus: cumulative progress tracker
 
