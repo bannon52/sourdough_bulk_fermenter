@@ -42,7 +42,7 @@ async def async_setup_entry(
             RecipeNumber(
                 coordinator, entry, "Starter", CONF_STARTER_G, "mdi:cup",
                 lambda c, v: setattr(c, "starter_g", v),
-                lambda c: c.starter_g, 0, MAX_STARTER_G, 5, "g",
+                lambda c: c.starter_g, 0, MAX_STARTER_G, 1, "g",
             ),
             RecipeNumber(
                 coordinator, entry, "Flour", CONF_FLOUR_G, "mdi:grain",

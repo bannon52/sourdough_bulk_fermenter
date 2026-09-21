@@ -194,8 +194,10 @@ discovered simply hides that part of the card (e.g. leave out
   "ready at" and remaining time updating live
 - **Ready** — a warm gold glow replaces the crust-amber fill
 
-Starter has its own always-visible slider since it's the value most likely to
-change bake-to-bake; flour and water sit in a collapsible row below.
+Starter has its own always-visible slider, with −/+ buttons for 1 g
+adjustments, since it's the value most likely to change bake-to-bake; flour
+and water sit in a collapsible row below. Sliders hold the drag for as long
+as your finger stays down, and only send the value when you let go.
 
 ## Bonus: cumulative progress tracker
 
@@ -205,6 +207,12 @@ helper over `sensor.<name>_fermentation_rate` (unit `1/h`, time unit hours). The
 running total climbs toward **1.0 (100%)** as the dough ferments — reset it when
 you mix a new batch, and you get a live "percent through bulk" readout that
 correctly accounts for temperature swings during the rise.
+
+## Icon
+
+The integration ships its own icon in `brand/` (Home Assistant 2026.3+),
+shown on the Integrations and device pages. HACS's store listing currently
+fetches icons from its own servers, so it may still show a placeholder there.
 
 ## Disclaimer
 A compass, not a GPS. Whole-grain flours ferment faster; stiff doughs slower.

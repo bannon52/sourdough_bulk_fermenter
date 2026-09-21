@@ -77,7 +77,7 @@ def _base_schema(d: dict[str, Any]) -> vol.Schema:
             ): _HUMIDITY_SELECTOR,
             vol.Required(
                 CONF_STARTER_G, default=d.get(CONF_STARTER_G, DEFAULT_STARTER_G)
-            ): _grams(0, MAX_STARTER_G, 5),
+            ): _grams(0, MAX_STARTER_G, 1),
             vol.Required(
                 CONF_FLOUR_G, default=d.get(CONF_FLOUR_G, DEFAULT_FLOUR_G)
             ): _grams(50, MAX_FLOUR_G, 5),
