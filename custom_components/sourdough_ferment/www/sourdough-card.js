@@ -17,6 +17,13 @@
 
   if (window.customElements.get("sourdough-fermentation-card")) return;
 
+  var CARD_VERSION = "1.4.1";
+  console.info(
+    "%c SOURDOUGH-FERMENTATION-CARD %c " + CARD_VERSION + " ",
+    "color:#1c1710;background:#d9974d;font-weight:600;",
+    "color:#d9974d;background:#1c1710;"
+  );
+
   var DOME_BASE = 150;
   var DOME_HEIGHT = 136; // base (150) - top (14)
   var DOME_PATH =
@@ -361,10 +368,44 @@
       this._config = config;
       this._structureKey = null;
       this._lastStates = null;
-      this._update();
+      this._safe(this._update);
     }
 
-    set hass(hass) { this._hass = hass; this._update(); }
+    set hass(hass) { this._hass = hass; this._safe(this._update); }
+
+    // Never let an exception escape to Home Assistant: HA replaces a card that
+    // throws with an error card for the rest of the session. Instead, show the
+    // real error on the card, log it, and rebuild on the next update.
+    _safe(fn, args) {
+      try {
+        fn.apply(this, args || []);
+        if (this._errorEl) {
+          // A rebuild may already have wiped it from the DOM; either way, clear it.
+          if (this._errorEl.parentNode) this._errorEl.parentNode.removeChild(this._errorEl);
+          this._errorEl = null;
+        }
+      } catch (err) {
+        this._reportError(err);
+      }
+    }
+
+    _reportError(err) {
+      console.error("sourdough-fermentation-card " + CARD_VERSION + " error:", err);
+      this._structureKey = null; // force a clean rebuild next time
+      this._lastStates = null;
+      try {
+        if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+        if (!this._errorEl) {
+          this._errorEl = document.createElement("div");
+          this._errorEl.setAttribute("style",
+            "margin:0 0 10px;padding:10px 12px;border-radius:12px;background:#3a1f16;" +
+            "color:#f2c9b8;font:13px/1.4 var(--ha-font-family-body,Roboto,sans-serif);");
+        }
+        this._errorEl.textContent = "Sourdough card error (v" + CARD_VERSION + "): " +
+          (err && err.message ? err.message : String(err)) + " \u2014 retrying on next update.";
+        this.shadowRoot.insertBefore(this._errorEl, this.shadowRoot.firstChild);
+      } catch (e2) { /* nothing more we can safely do */ }
+    }
     getCardSize() { return 7; }
 
     connectedCallback() { this._syncAnimation(); this._syncTicker(); }
@@ -499,8 +540,8 @@
 
       var self = this;
       ["starter", "flour", "water"].forEach(function (n) {
-        if (refs[n + "Minus"]) refs[n + "Minus"].addEventListener("click", function () { self._nudge(n, -1); });
-        if (refs[n + "Plus"]) refs[n + "Plus"].addEventListener("click", function () { self._nudge(n, 1); });
+        if (refs[n + "Minus"]) refs[n + "Minus"].addEventListener("click", function () { self._safe(self._nudge, [n, -1]); });
+        if (refs[n + "Plus"]) refs[n + "Plus"].addEventListener("click", function () { self._safe(self._nudge, [n, 1]); });
       });
       refs.risenBtn.addEventListener("click", function () {
         if (self._risenKey) storeSet(RISEN_KEY + self._ents.progress_entity, self._risenKey);
@@ -529,7 +570,7 @@
       var self = this;
       this._sliders[name] = new Slider(el,
         function (v) { label.textContent = fmtGrams(v); },
-        function (v) { self._commit(name, v); });
+        function (v) { self._safe(self._commit, [name, v]); });
     }
 
     _commit(name, value) {
@@ -671,7 +712,7 @@
       var want = this._status === "ready" && this.isConnected;
       var self = this;
       if (want && !this._ticker) {
-        this._ticker = setInterval(function () { if (self._hass) self._fill(); }, 30000);
+        this._ticker = setInterval(function () { if (self._hass) self._safe(self._fill); }, 30000);
       } else if (!want && this._ticker) {
         clearInterval(this._ticker); this._ticker = null;
       }
@@ -743,6 +784,10 @@
     }
 
     _frame(now) {
+      try { this._frameInner(now); } catch (err) { this._raf = null; this._reportError(err); }
+    }
+
+    _frameInner(now) {
       this._raf = null;
       if (this._status !== "fermenting" || !this.isConnected) return;
       var t = (window.performance ? window.performance.now() : now) / 1000;

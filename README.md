@@ -229,6 +229,15 @@ The integration ships its own icon in `brand/` (Home Assistant 2026.3+),
 shown on the Integrations and device pages. HACS's store listing currently
 fetches icons from its own servers, so it may still show a placeholder there.
 
+## Troubleshooting the card
+
+- When the card's script loads, the browser console (F12) shows a
+  `SOURDOUGH-FERMENTATION-CARD` line with its version. If that line is missing,
+  the script didn't load; check *Settings → System → Logs* for "Sourdough".
+- If the card hits an internal error, it shows the message on the card itself
+  (and logs details to the console), then retries on the next update, instead
+  of being replaced by Home Assistant's error card.
+
 ## Disclaimer
 A compass, not a GPS. Whole-grain flours ferment faster; stiff doughs slower.
 Always confirm with dough feel, ~50–75% rise, and the windowpane test.

@@ -52,33 +52,37 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
     """Serve the dashboard card's JS and auto-load it on every dashboard.
 
     Runs once per Home Assistant session no matter how many config entries
-    exist, guarded by a flag in hass.data. No manual 'Add Resource' step is
-    needed in Settings -> Dashboards -> Resources.
+    exist. The "done" flag is only set after registration succeeds, so a
+    failure is retried on the next setup instead of being skipped for the
+    rest of the session. Failures are logged but never block the integration.
     """
     if hass.data.get(_FRONTEND_REGISTERED_KEY):
         return
-    hass.data[_FRONTEND_REGISTERED_KEY] = True
 
     www_dir = Path(__file__).parent / "www"
-
     try:
-        await hass.http.async_register_static_paths(
-            [StaticPathConfig("/sourdough_ferment_static", str(www_dir), False)]
-        )
-    except AttributeError:
-        # Fallback for older Home Assistant cores predating the async API.
-        await hass.async_add_executor_job(
-            hass.http.register_static_path,
-            "/sourdough_ferment_static",
-            str(www_dir),
-            False,
-        )
+        try:
+            await hass.http.async_register_static_paths(
+                [StaticPathConfig("/sourdough_ferment_static", str(www_dir), False)]
+            )
+        except RuntimeError as err:
+            # Path already registered earlier this session (e.g. a previous
+            # attempt got this far before failing) - safe to continue.
+            _LOGGER.debug("Static path already registered: %s", err)
 
-    try:
-        integration = await async_get_integration(hass, DOMAIN)
-        cache_bust = str(integration.version) if integration.version else "0"
-    except Exception:  # noqa: BLE001 - cosmetic cache-busting only, never fatal
-        cache_bust = "0"
+        try:
+            integration = await async_get_integration(hass, DOMAIN)
+            cache_bust = str(integration.version) if integration.version else "0"
+        except Exception:  # noqa: BLE001 - cosmetic cache-busting only
+            cache_bust = "0"
 
-    add_extra_js_url(hass, _script_url(cache_bust))
+        add_extra_js_url(hass, _script_url(cache_bust))
+    except Exception:  # noqa: BLE001 - card is optional; never fail setup over it
+        _LOGGER.exception(
+            "Sourdough Fermentation: could not register the dashboard card; "
+            "it will be retried the next time the integration is set up"
+        )
+        return
+
+    hass.data[_FRONTEND_REGISTERED_KEY] = True
     _LOGGER.debug("Registered Sourdough Fermentation dashboard card (v%s)", cache_bust)
