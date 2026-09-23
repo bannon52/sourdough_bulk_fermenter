@@ -231,6 +231,9 @@ fetches icons from its own servers, so it may still show a placeholder there.
 
 ## Troubleshooting the card
 
+- The card registers itself again if Home Assistant's frontend swaps in its
+  scoped custom element registry mid-load, which otherwise causes an
+  intermittent "Custom element doesn't exist" / Configuration error card.
 - When the card's script loads, the browser console (F12) shows a
   `SOURDOUGH-FERMENTATION-CARD` line with its version. If that line is missing,
   the script didn't load; check *Settings → System → Logs* for "Sourdough".

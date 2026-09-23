@@ -15,9 +15,10 @@
 (function () {
   "use strict";
 
-  if (window.customElements.get("sourdough-fermentation-card")) return;
+  if (window.__sourdoughCardLoaded) return; // script imported twice
+  window.__sourdoughCardLoaded = true;
 
-  var CARD_VERSION = "1.4.1";
+  var CARD_VERSION = "1.4.2";
   console.info(
     "%c SOURDOUGH-FERMENTATION-CARD %c " + CARD_VERSION + " ",
     "color:#1c1710;background:#d9974d;font-weight:600;",
@@ -809,7 +810,6 @@
     }
   }
 
-  window.customElements.define("sourdough-fermentation-card", SourdoughFermentationCard);
 
   // ---------------------------------------------------------------------------
   // Visual editor
@@ -843,16 +843,58 @@
       this._form.data = this._config;
     }
   }
-  if (!window.customElements.get("sourdough-fermentation-card-editor")) {
-    window.customElements.define("sourdough-fermentation-card-editor", SourdoughFermentationCardEditor);
+  // ---------------------------------------------------------------------------
+  // Registration
+  //
+  // Home Assistant's frontend installs a scoped custom element registry, which
+  // REPLACES window.customElements partway through page load. This module is
+  // loaded early (as an extra module) and can register BEFORE that happens -
+  // and anything in the old registry is invisible to the new one, so Home
+  // Assistant reports "Custom element doesn't exist" and shows a Configuration
+  // error card. It is a race, so it only bites on some page loads.
+  //
+  // Register now, then watch for the registry being swapped and register again
+  // in whatever registry Home Assistant settles on. Re-registration uses a
+  // subclass, because one constructor cannot be registered twice.
+  // ---------------------------------------------------------------------------
+  var CARD_TAG = "sourdough-fermentation-card";
+  var EDITOR_TAG = "sourdough-fermentation-card-editor";
+
+  function defineIn(registry) {
+    if (!registry || typeof registry.define !== "function") return;
+    try {
+      if (!registry.get(CARD_TAG)) {
+        registry.define(CARD_TAG, class extends SourdoughFermentationCard {});
+      }
+      if (!registry.get(EDITOR_TAG)) {
+        registry.define(EDITOR_TAG, class extends SourdoughFermentationCardEditor {});
+      }
+    } catch (err) {
+      console.warn("sourdough-fermentation-card: registration failed", err);
+    }
   }
 
+  defineIn(window.customElements);
+
+  var seenRegistry = window.customElements;
+  var watchTicks = 0;
+  var watcher = setInterval(function () {
+    if (window.customElements !== seenRegistry) {
+      seenRegistry = window.customElements;
+      defineIn(seenRegistry);
+    }
+    if (++watchTicks > 1200) clearInterval(watcher); // stop after ~60s
+  }, 50);
+
   window.customCards = window.customCards || [];
-  window.customCards.push({
-    type: "sourdough-fermentation-card",
-    name: "Sourdough Fermentation Card",
-    description: "A rising-dough dashboard card for the Sourdough Fermentation integration.",
-    preview: true,
-    documentationURL: "https://github.com/bannon52/sourdough_bulk_fermenter"
-  });
+  if (!window.customCards.some(function (c) { return c.type === CARD_TAG; })) {
+    window.customCards.push({
+      type: CARD_TAG,
+      name: "Sourdough Fermentation Card",
+      description: "A rising-dough dashboard card for the Sourdough Fermentation integration.",
+      preview: true,
+      documentationURL: "https://github.com/bannon52/sourdough_bulk_fermenter"
+    });
+  }
+
 })();
