@@ -18,7 +18,7 @@
   if (window.__sourdoughCardLoaded) return; // script imported twice
   window.__sourdoughCardLoaded = true;
 
-  var CARD_VERSION = "1.4.2";
+  var CARD_VERSION = "1.4.3";
   console.info(
     "%c SOURDOUGH-FERMENTATION-CARD %c " + CARD_VERSION + " ",
     "color:#1c1710;background:#d9974d;font-weight:600;",
@@ -170,12 +170,24 @@
     ".env-item{display:flex;align-items:center;gap:3px;font-size:12px;color:var(--sf-muted);}" +
     ".env-item svg{width:13px;height:13px;}" +
     ".env-item.off{opacity:.45;}" +
-    ".risen{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--sf-gold);color:#1c1710;border-radius:14px;padding:12px 12px 12px 16px;margin-bottom:14px;animation:sf-risen .5s ease-out;}" +
-    ".risen-text{font-size:17px;font-weight:500;}" +
-    ".risen-btn{display:flex;align-items:center;gap:6px;border:none;border-radius:10px;padding:8px 12px;background:rgba(28,23,16,.14);color:#1c1710;font-size:13px;font-weight:500;cursor:pointer;}" +
-    ".risen-btn:active{background:rgba(28,23,16,.24);}" +
-    "@keyframes sf-risen{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;}}" +
-    "@media (prefers-reduced-motion:reduce){.risen{animation:none;}}" +
+    ".dome-wrap{position:relative;}" +
+    ".risen{position:absolute;left:-14px;right:-14px;top:-10px;bottom:-4px;z-index:3;pointer-events:none;animation:sf-risen .45s ease-out;" +
+      "background:radial-gradient(circle at 50% 44%,rgba(20,16,10,.42),rgba(20,16,10,0) 62%);}" +
+    ".risen .cross{position:absolute;top:46%;left:50%;width:74px;height:116px;margin:-72px 0 0 -37px;" +
+      "filter:drop-shadow(0 4px 12px rgba(0,0,0,.75));}" +
+    ".ribbon{position:absolute;top:46%;left:50%;transform:translate(-50%,-50%) rotate(-7deg);z-index:2;background:linear-gradient(180deg,#f2c76a,#dfa53c);color:#1c1710;font-size:17px;font-weight:600;letter-spacing:.2px;padding:9px 30px;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.55);" +
+      "clip-path:polygon(0 0,100% 0,90% 50%,100% 100%,0 100%,10% 50%);}" +
+    ".risen-actions{display:flex;justify-content:center;margin:2px 0 10px;}" +
+    ".risen-btn{display:flex;align-items:center;gap:7px;border:none;border-radius:11px;padding:10px 18px;cursor:pointer;" +
+      "background:var(--sf-gold);color:#1c1710;font-size:14px;font-weight:600;box-shadow:0 3px 12px rgba(230,176,74,.28);}" +
+    ".risen-btn:active{filter:brightness(1.1);}" +
+    ".streamers{position:absolute;inset:0;overflow:visible;}" +
+    ".streamer{position:absolute;left:50%;top:46%;width:8px;height:14px;border-radius:2px;background:var(--c);opacity:0;" +
+      "animation:sf-streamer 2.6s ease-out infinite;animation-delay:var(--d);}" +
+    "@keyframes sf-streamer{0%{transform:translate(-50%,-50%) rotate(0deg) scale(.6);opacity:0;}" +
+      "12%{opacity:1;}70%{opacity:.9;}100%{transform:translate(var(--dx),var(--dy)) rotate(var(--rot)) scale(1);opacity:0;}}" +
+    "@keyframes sf-risen{from{opacity:0;transform:scale(.92);}to{opacity:1;transform:none;}}" +
+    "@media (prefers-reduced-motion:reduce){.risen{animation:none;}.streamer{animation:none;opacity:.85;}}" +
     ".nudge-btn.sm{width:26px;height:26px;font-size:15px;border-radius:8px;}" +
     ".nudge-val{min-width:56px;text-align:center;}" +
     ".stat-label{display:flex;justify-content:space-between;align-items:center;}" +
@@ -465,9 +477,6 @@
       var h = CSS + '<div class="card">' +
         '<div class="unavailable" data-r="unavailable" style="display:none"></div>' +
         '<div data-r="main">' +
-        '<div class="risen" data-r="risen" style="display:none">' +
-        '<div class="risen-text">He has risen!</div>' +
-        '<button class="risen-btn" data-r="risenBtn">\u2713 He has risen indeed</button></div>' +
         '<div class="header"><div class="title"><span data-r="title"></span></div>' +
         '<div class="hdr-right"><span class="pill idle" data-r="pill">Idle</span>' +
         '<div class="env-mini">' +
@@ -482,7 +491,19 @@
         '<rect data-r="surface" x="0" y="' + DOME_BASE + '" width="200" height="0" fill="#e6b04a"/>' +
         '<g data-r="bubbles"></g></g>' +
         '<path d="' + DOME_PATH + '" fill="none" stroke="#4a3d2a" stroke-width="3"/>' +
-        '</svg><div class="dome-caption" data-r="caption"></div></div>' +
+        '</svg><div class="dome-caption" data-r="caption"></div>' +
+        '<div class="risen" data-r="risen" style="display:none">' +
+        '<div class="streamers" data-r="streamers"></div>' +
+        '<svg class="cross" viewBox="0 0 78 104" aria-hidden="true">' +
+        '<rect x="29" y="2" width="16" height="112" rx="3" fill="#f6ead2"/>' +
+        '<rect x="2" y="34" width="70" height="16" rx="3" fill="#f6ead2"/>' +
+        '<rect x="33" y="2" width="4" height="112" fill="#ffffff" opacity=".5"/>' +
+        '<rect x="6" y="34" width="62" height="4" fill="#ffffff" opacity=".4"/>' +
+        '</svg>' +
+        '<div class="ribbon">He has risen!</div>' +
+        '</div></div>' +
+        '<div class="risen-actions" data-r="risenActions" style="display:none">' +
+        '<button class="risen-btn" data-r="risenBtn">\u2713 He has risen indeed</button></div>' +
         '<div class="stats">' +
         '<div class="stat tap" data-r="s1"><div class="stat-label"><span data-r="l1"></span>' + ICON_HIST + '</div><div class="stat-value" data-r="v1"></div></div>' +
         '<div class="stat tap" data-r="s2"><div class="stat-label"><span data-r="l2"></span>' + ICON_HIST + '</div><div class="stat-value" data-r="v2"></div></div></div>';
@@ -523,6 +544,23 @@
       this._refs = refs;
       refs.title.textContent = this._config.title || "Sourdough Bulk";
 
+      // Streamers for the "He has risen!" burst (deterministic, not random,
+      // so every device shows the same thing).
+      var COLORS = ["#e6b04a", "#f3e6cf", "#d9974d", "#8fae5d", "#f2c76a"];
+      for (var s = 0; s < 18; s++) {
+        var angle = (s / 18) * Math.PI * 2 + (s % 3) * 0.12;
+        var dist = 78 + (s % 4) * 18;
+        var sp = document.createElement("span");
+        sp.className = "streamer";
+        sp.setAttribute("style",
+          "--dx:" + Math.round(Math.cos(angle) * dist) + "px;" +
+          "--dy:" + Math.round(Math.sin(angle) * dist * 0.8) + "px;" +
+          "--rot:" + (((s * 57) % 360) - 180) + "deg;" +
+          "--c:" + COLORS[s % COLORS.length] + ";" +
+          "--d:" + ((s % 6) * 0.22).toFixed(2) + "s;");
+        refs.streamers.appendChild(sp);
+      }
+
       // Bubbles (positions set per animation frame)
       this._bubbleEls = [];
       for (var b = 0; b < BUBBLES.length; b++) {
@@ -545,8 +583,11 @@
         if (refs[n + "Plus"]) refs[n + "Plus"].addEventListener("click", function () { self._safe(self._nudge, [n, 1]); });
       });
       refs.risenBtn.addEventListener("click", function () {
+        // Acknowledge and clear the finished bake, ready for the next loaf.
         if (self._risenKey) storeSet(RISEN_KEY + self._ents.progress_entity, self._risenKey);
         refs.risen.style.display = "none";
+        refs.risenActions.style.display = "none";
+        self._safe(self._press, [self._ents.reset_entity]);
       });
       if (refs.recipeSummary) {
         refs.recipeSummary.addEventListener("click", function () {
@@ -671,6 +712,7 @@
       this._risenKey = risenKey;
       var showRisen = !!risenKey && storeGet(RISEN_KEY + e.progress_entity) !== risenKey;
       r.risen.style.display = showRisen ? "" : "none";
+      r.risenActions.style.display = showRisen ? "" : "none";
       r.l1.textContent = l1; r.v1.textContent = v1;
       r.l2.textContent = l2; r.v2.textContent = v2;
       r.v2.className = "stat-value" + (dim ? " dim" : "");

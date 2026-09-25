@@ -34,6 +34,9 @@ CONF_STARTER_HYDRATION = "starter_hydration_pct"
 CONF_NOTIFY_SERVICES = "notify_services"
 CONF_HEADS_UP_MINUTES = "heads_up_minutes"
 DEFAULT_HEADS_UP_MINUTES = 30
+# Skip the heads-up if this little time is left: the completion alert is
+# about to arrive anyway, and two pings seconds apart is just noise.
+HEADS_UP_FLOOR_MINUTES = 3
 
 NOTIFY_TITLE_FALLBACK = "Sourdough"
 NOTIFY_MESSAGE = "He has risen! Bulk fermentation is complete."

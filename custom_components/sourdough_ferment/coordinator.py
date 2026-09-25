@@ -27,6 +27,7 @@ from .const import (
     CONF_HEADS_UP_MINUTES,
     CONF_NOTIFY_SERVICES,
     DEFAULT_HEADS_UP_MINUTES,
+    HEADS_UP_FLOOR_MINUTES,
     NOTIFY_MESSAGE,
     NOTIFY_TITLE_FALLBACK,
     CONF_DOUGH_PROBE,
@@ -297,48 +298,113 @@ class SourdoughCoordinator:
             if self.progress >= 1.0:
                 self.active = False
                 self.completed_at = now
-                self._send_notifications(NOTIFY_MESSAGE)
+                detail = self._completion_detail(now)
+                self._send_notifications(
+                    NOTIFY_MESSAGE + (f"\n{detail}" if detail else ""),
+                    "done",
+                    detail,
+                )
             elif rate > 0:
                 self._check_heads_up((1.0 - self.progress) / rate, now)
         self._notify()
 
+    def _clock(self, when: datetime) -> str:
+        local = dt_util.as_local(when)
+        hour = local.hour % 12 or 12
+        return f"{hour}:{local.minute:02d} {'AM' if local.hour < 12 else 'PM'}"
+
+    def _completion_detail(self, now: datetime) -> str | None:
+        """One-line summary of the bake, or None if the start time is unknown."""
+        if not self.started_at:
+            return None
+        total = (now - self.started_at).total_seconds() / 60.0
+        hours, mins = divmod(int(round(total)), 60)
+        took = f"{hours}h {mins:02d}m" if hours else f"{mins}m"
+        return (
+            f"Started {self._clock(self.started_at)}, "
+            f"finished {self._clock(now)} \u2014 took {took}."
+        )
+
     @callback
     def _check_heads_up(self, remaining_h: float, now: datetime) -> None:
-        """Send a one-off 'nearly done' alert when the lead time is reached."""
+        """Send a one-off 'nearly done' alert when the lead time is reached.
+
+        Remaining time is re-forecast every tick, so it can wander back and
+        forth across the threshold as the temperature changes, or jump straight
+        past it after a warm spell. Rules:
+
+        * at most one heads-up per bake (the flag, which also survives restarts)
+        * a jump past the threshold still alerts, with the real time remaining
+        * no alert if the bake began with less than the lead time to go
+        * no alert inside the floor, where completion is imminent anyway
+        """
         if self.heads_up_minutes <= 0 or self.heads_up_sent:
             return
         remaining_min = remaining_h * 60.0
+
         if not self._heads_up_checked:
             self._heads_up_checked = True
             if remaining_min <= self.heads_up_minutes:
                 # Bake started with less than the lead time left: skip the
                 # alert rather than send "30 minutes left" right after Start.
                 self.heads_up_sent = True
+                _LOGGER.debug(
+                    "Heads-up skipped: bake started with %.1f min left (lead %.0f)",
+                    remaining_min, self.heads_up_minutes,
+                )
                 return
-        if remaining_min <= self.heads_up_minutes:
-            self.heads_up_sent = True
-            ready = dt_util.as_local(now + timedelta(hours=remaining_h))
-            hour = ready.hour % 12 or 12
-            clock = f"{hour}:{ready.minute:02d} {'AM' if ready.hour < 12 else 'PM'}"
-            mins = max(1, round(remaining_min))
-            self._send_notifications(
-                f"Nearly there: about {mins} minutes left. Ready around {clock}."
+
+        if remaining_min > self.heads_up_minutes:
+            return
+
+        self.heads_up_sent = True  # one per bake, whatever happens next
+
+        if remaining_min < HEADS_UP_FLOOR_MINUTES:
+            _LOGGER.debug(
+                "Heads-up skipped: only %.1f min left, completion alert is imminent",
+                remaining_min,
             )
+            return
+
+        clock = self._clock(now + timedelta(hours=remaining_h))
+        mins = max(1, round(remaining_min))
+        _LOGGER.debug("Sending heads-up: %d min left, ready around %s", mins, clock)
+        self._send_notifications(
+            f"Nearly there: about {mins} minutes left. Ready around {clock}.",
+            "heads_up",
+            f"Ready around {clock}.",
+        )
 
     @callback
-    def _send_notifications(self, message: str) -> None:
+    def _send_notifications(
+        self, message: str, kind: str, detail: str | None = None
+    ) -> None:
         """Send a message to every selected notify target."""
         for service in self.notify_services:
-            self.hass.async_create_task(self._async_notify_one(service, message))
+            self.hass.async_create_task(
+                self._async_notify_one(service, message, kind, detail)
+            )
 
-    async def _async_notify_one(self, service: str, message: str) -> None:
+    async def _async_notify_one(
+        self, service: str, message: str, kind: str, detail: str | None = None
+    ) -> None:
         data = {
             "title": self.entry.title or NOTIFY_TITLE_FALLBACK,
             "message": message,
         }
         if service.startswith("mobile_app_"):
-            # Same tag -> a later notification replaces this one on the phone.
-            data["data"] = {"tag": f"sourdough_bulk_{self.entry.entry_id}"}
+            # One shared tag: the completion alert replaces the heads-up rather
+            # than adding a second entry to the notification shade. The detail
+            # from the bake is carried in the completion message instead, which
+            # Android shows when the notification is expanded.
+            payload = {"tag": f"sourdough_bulk_{self.entry.entry_id}"}
+            if detail:
+                # Secondary heading, visible without expanding the notification.
+                # iOS/macOS use "subtitle"; Android uses "subject". Sending both
+                # is harmless - each platform ignores the other's field.
+                payload["subtitle"] = detail
+                payload["subject"] = detail
+            data["data"] = payload
         try:
             await self.hass.services.async_call("notify", service, data, blocking=False)
         except Exception as err:  # noqa: BLE001 - never let a notify failure break the timer

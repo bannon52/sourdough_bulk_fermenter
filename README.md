@@ -193,8 +193,9 @@ discovered simply hides that part of the card (e.g. leave out
 - **Fermenting** — the dough rises from its starting level to fill the dome at
   100%, bubbles animating, with "ready at" and remaining time updating live
 - **Ready** — a warm gold glow replaces the crust-amber fill, a "He has risen!"
-  banner appears (dismiss it with "He has risen indeed"; remembered per device,
-  per bake), and the stats show when bulk finished and how long ago
+  ribbon appears across a cross over the dough with streamers bursting around
+  it, and the stats show when bulk finished and how long ago. "He has risen
+  indeed" acknowledges the bake and resets the timer, ready for the next loaf
 
 Tap either stat box to open its history graph, or the dome for progress
 history. Under the status badge, the temperature and humidity in use are shown
@@ -221,7 +222,13 @@ pick any notify targets (phones, the HA sidebar, etc.) under *Notify when bulk
 finishes*. Each gets one "He has risen!" alert when bulk completes, plus a
 one-off heads-up when about 30 minutes remain (adjust with *Heads-up before
 finish*, or set it to 0 to turn it off). The heads-up is skipped for bakes that
-start with less than that much time to go.
+start with less than that much time to go, and for the last few minutes, where
+the completion alert is about to arrive anyway. It is sent at most once per
+bake even if the forecast drifts back and forth across the threshold. On
+phones the completion alert replaces the heads-up rather than adding a second
+entry, and carries a detail line (start time, finish time, total). That line
+is sent both in the body and as the platform's secondary heading (`subtitle`
+on iOS, `subject` on Android), so it's visible without expanding.
 
 ## Icon
 
